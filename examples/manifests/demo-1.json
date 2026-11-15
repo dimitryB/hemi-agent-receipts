@@ -1,0 +1,35 @@
+{
+  "receiptVersion": 1,
+  "runId": "0x57f6665a1ab06f0e27a2d458b3f20b3a89a90bc00a36e55ccb3280b3470d5709",
+  "agent": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+  "principal": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+  "startedAt": 1793290000,
+  "endedAt": 1793290050,
+  "model": "claude-fable-5-1",
+  "promptHash": "0x8ad8b45a5047d63b41ac4cb381c135281176320b9b61f6e4a698d402795b8aa8",
+  "outputHash": "0xd5147fb29d65bbceae13038dcdcdd2241ab225f98faa76c0f3aaa504f478fd2a",
+  "toolCalls": [
+    {
+      "name": "search_email",
+      "argsHash": "0x4e8972a07e3ab733bb8deb5d8137af56286ea0c046245eeeeef774109e533327",
+      "resultHash": "0x0792fb9ea272d9b13f0f00c41cbcb78c67ad9557657256c8a4239ca9bfb17277",
+      "at": 1793290005
+    },
+    {
+      "name": "draft_email",
+      "argsHash": "0x256ec83f279873f72326072ea076210bb2687edf48f43ad0bb5011a231242ff0",
+      "resultHash": "0xbb4f1bacb344763449a1404990d26217806b9ef1fa0165722a699dab510fe992",
+      "at": 1793290015
+    }
+  ],
+  "spend": [
+    {
+      "asset": "usd",
+      "amount": "0.0021"
+    }
+  ],
+  "tags": [
+    "demo",
+    "email"
+  ]
+}

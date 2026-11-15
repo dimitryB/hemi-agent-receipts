@@ -1,0 +1,133 @@
+
+[smoke] 1. start the service on http://127.0.0.1:8789 against registry 0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 (DEV_FREE unset: every receipt is paid)
+{"ok":true,"chainId":43111,"registry":"0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40","serviceSigner":"0xcFD277613FcB5d6A7B2BFcA93d44E78a1d3c6E0c","relayer":"0x0c9aCd4F85946587fC15CA55Ea9A1c48Aaee162f","devFree":false}
+USDC.e before: buyer 0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F 50000, PAY_TO 0xbe191f7072aD49c4c15434780C5cE0ED5bfB7535 0 (base units)
+
+[smoke] 2. three fresh manifests from examples/trace.jsonl (agent 0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F)
+wrote demo/mainnet-smoke-20261113T022336Z/manifest-1.json
+runId 0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2  manifestHash 0x1076b4280a2ec9703b53ca5d862bd5dc9136a7d55557f7315f6f790819800128  (4 tool calls, 2 spend)
+wrote demo/mainnet-smoke-20261113T022336Z/manifest-2.json
+runId 0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d  manifestHash 0x497072a27b16127bbc2bc6f58181dfcb6826e321c7ca639506093f18aad18abc  (4 tool calls, 2 spend)
+wrote demo/mainnet-smoke-20261113T022336Z/manifest-3.json
+runId 0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b  manifestHash 0x024593fca94cb8e2477c6440debd438ee1ec603faa2dd0cc78e73e02d4325f1d  (4 tool calls, 2 spend)
+
+[smoke] 3. receipts attest: each 402 is paid with x402 (EIP-3009 USDC.e), then it waits for hemi-confirmed
+paying 1000 base units of 0xad11a8BEb98bbf61dbb1aa0F6d6F2ECD87b35afA on eip155:43111 to 0xbe191f7072aD49c4c15434780C5cE0ED5bfB7535 from 0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F (x402 eip3009)
+paying 1000 base units of 0xad11a8BEb98bbf61dbb1aa0F6d6F2ECD87b35afA on eip155:43111 to 0xbe191f7072aD49c4c15434780C5cE0ED5bfB7535 from 0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F (x402 eip3009)
+paying 1000 base units of 0xad11a8BEb98bbf61dbb1aa0F6d6F2ECD87b35afA on eip155:43111 to 0xbe191f7072aD49c4c15434780C5cE0ED5bfB7535 from 0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F (x402 eip3009)
+[
+  {
+    "file": "demo/mainnet-smoke-20261113T022336Z/manifest-1.json",
+    "runId": "0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-confirmed",
+    "receiptUrl": "http://127.0.0.1:8789/receipts/0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2",
+    "receiptFile": "demo/mainnet-smoke-20261113T022336Z/receipts/0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2.receipt.json"
+  },
+  {
+    "file": "demo/mainnet-smoke-20261113T022336Z/manifest-2.json",
+    "runId": "0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-confirmed",
+    "receiptUrl": "http://127.0.0.1:8789/receipts/0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d",
+    "receiptFile": "demo/mainnet-smoke-20261113T022336Z/receipts/0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d.receipt.json"
+  },
+  {
+    "file": "demo/mainnet-smoke-20261113T022336Z/manifest-3.json",
+    "runId": "0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-confirmed",
+    "receiptUrl": "http://127.0.0.1:8789/receipts/0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b",
+    "receiptFile": "demo/mainnet-smoke-20261113T022336Z/receipts/0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b.receipt.json"
+  }
+]
+
+[smoke] 4. one BatchAttested transaction holds all three
+tx       0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b
+explorer https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b
+{"status":"0x1","blockNumber":"0x575183","gasUsed":"0x252ce","from":"0x0c9acd4f85946587fc15ca55ea9a1c48aaee162f","logs":1}
+BatchAttested: batchId 1, count 3
+
+[smoke] 5. the payments: the buyer paid 3 × the batch price to PAY_TO
+runId=0x1a35f367… tx=0x6effe1b1cfb1c294e3f6747b6f5aa1e043ae38a11de4ee8da3a69705ddcd9716
+runId=0x22608570… tx=0x41d25df9c1c4193d250f2acf29baa84e0c7d806145094af0c2632553a2055d0a
+runId=0x2a1fbf7e… tx=0x3309a47af2ec6d6b31876da648983ce9ea9bb5cbc40b30e397745590ec171d9c
+USDC.e after:  buyer 47000 (−3000), PAY_TO 3000 (+3000)
+
+[smoke] 6. stop the service, then verify with only an RPC and the registry address
+service stopped: http://127.0.0.1:8789/health no longer answers
+receipt 0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2
+  Hemi, registry 0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f (ECDSA)
+VALID: in batch 1, anchored by tx 0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b (https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b)
+  stage hemi-confirmed, 18 Hemi confirmations, safe head 5722513
+  bitcoin not on Bitcoin yet; ESTIMATE: published by ~2026-11-13T02:40:11Z, final by ~2026-11-13T04:07:11Z (keystone 5722500 not found on Bitcoin yet; PoP is live (payout in keystone block 5722000). ESTIMATE, not verified: published by ~2026-11-13T02:40:11Z (p50; p90 2026-11-13T04:54:11Z), final by ~2026-11-13T04:07:11Z (p50; p90 2026-11-13T06:38:11Z))
+receipt 0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d
+  Hemi, registry 0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f (ECDSA)
+VALID: in batch 1, anchored by tx 0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b (https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b)
+  stage hemi-confirmed, 18 Hemi confirmations, safe head 5722513
+  bitcoin not on Bitcoin yet; ESTIMATE: published by ~2026-11-13T02:40:11Z, final by ~2026-11-13T04:07:11Z (keystone 5722500 not found on Bitcoin yet; PoP is live (payout in keystone block 5722000). ESTIMATE, not verified: published by ~2026-11-13T02:40:11Z (p50; p90 2026-11-13T04:54:11Z), final by ~2026-11-13T04:07:11Z (p50; p90 2026-11-13T06:38:11Z))
+receipt 0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b
+  Hemi, registry 0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f (ECDSA)
+VALID: in batch 1, anchored by tx 0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b (https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b)
+  stage hemi-confirmed, 19 Hemi confirmations, safe head 5722513
+  bitcoin not on Bitcoin yet; ESTIMATE: published by ~2026-11-13T02:40:11Z, final by ~2026-11-13T04:07:11Z (keystone 5722500 not found on Bitcoin yet; PoP is live (payout in keystone block 5722000). ESTIMATE, not verified: published by ~2026-11-13T02:40:11Z (p50; p90 2026-11-13T04:54:11Z), final by ~2026-11-13T04:07:11Z (p50; p90 2026-11-13T06:38:11Z))
+
+[smoke] 7. the SDK's known deployment: verify without --registry
+receipt 0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2
+  Hemi, registry 0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 (known deployment on chain 43111)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f (ECDSA)
+VALID: in batch 1, anchored by tx 0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b (https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b)
+  stage hemi-confirmed, 19 Hemi confirmations, safe head 5722513
+  bitcoin not on Bitcoin yet; ESTIMATE: published by ~2026-11-13T02:40:11Z, final by ~2026-11-13T04:07:11Z (keystone 5722500 not found on Bitcoin yet; PoP is live (payout in keystone block 5722000). ESTIMATE, not verified: published by ~2026-11-13T02:40:11Z (p50; p90 2026-11-13T04:54:11Z), final by ~2026-11-13T04:07:11Z (p50; p90 2026-11-13T06:38:11Z))
+
+[smoke] done: demo/mainnet-smoke-20261113T022336Z

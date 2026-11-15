@@ -1,0 +1,16 @@
+receipt 0x1ff74a22866f3e1bc6351f7b125c483122d598a178d971ff98d0115d522341a1
+  Hemi Testnet, registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  fail  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+INVALID
+  - agent signature recovers to 0x21c369839837acbc1735be094d9909a0a5b40a42, expected agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 or principal 0x15d34aaf54267db7d7c367839aaf71a00a2c6a65; neither agent nor principal is a contract wallet
+  stage hemi-confirmed

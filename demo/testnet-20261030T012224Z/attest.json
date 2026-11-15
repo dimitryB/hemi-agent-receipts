@@ -1,0 +1,29 @@
+[
+  {
+    "file": "demo/testnet-20261030T012224Z/manifest-1.json",
+    "runId": "0x9b198a4c3d47543388630c697611115b8773eb30d09bf4ebd22281b5b03f4191",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-included",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0x9b198a4c3d47543388630c697611115b8773eb30d09bf4ebd22281b5b03f4191",
+    "receiptFile": "demo/testnet-20261030T012224Z/receipts/0x9b198a4c3d47543388630c697611115b8773eb30d09bf4ebd22281b5b03f4191.receipt.json"
+  },
+  {
+    "file": "demo/testnet-20261030T012224Z/manifest-2.json",
+    "runId": "0xa015954dc83fd6ea51d69c79eaa5fd582ccee1f416492d77458ffba9de07c173",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-included",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0xa015954dc83fd6ea51d69c79eaa5fd582ccee1f416492d77458ffba9de07c173",
+    "receiptFile": "demo/testnet-20261030T012224Z/receipts/0xa015954dc83fd6ea51d69c79eaa5fd582ccee1f416492d77458ffba9de07c173.receipt.json"
+  },
+  {
+    "file": "demo/testnet-20261030T012224Z/manifest-3.json",
+    "runId": "0xf3dbf177ec4c4452a23034d3b0e0b2aa998d3602f1da88d6441597a3f987ed64",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-included",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0xf3dbf177ec4c4452a23034d3b0e0b2aa998d3602f1da88d6441597a3f987ed64",
+    "receiptFile": "demo/testnet-20261030T012224Z/receipts/0xf3dbf177ec4c4452a23034d3b0e0b2aa998d3602f1da88d6441597a3f987ed64.receipt.json"
+  }
+]

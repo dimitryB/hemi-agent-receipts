@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Agent Receipt Viewer</title>
+  <meta name="description" content="Check an AI agent's run receipt against Hemi and Bitcoin, in plain language.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23ff4600'/%3E%3Cpath d='M9 17l5 5 9-12' stroke='%23180802' stroke-width='3.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32" width="26" height="26"><path d="M9 17l5 5 9-12" stroke="currentColor" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      <div>
+        <h1>Receipt viewer</h1>
+        <p class="lede">Is this record of an AI agent's run real, and how settled is it? It asks Hemi, which anchors to Bitcoin, whenever it can reach it.</p>
+      </div>
+    </div>
+    <button id="theme" class="ghost" type="button" aria-label="Switch between light and dark">◐</button>
+  </header>
+
+  <main>
+    <section class="load" aria-labelledby="load-title">
+      <h2 id="load-title" class="sr-only">Open a receipt</h2>
+      <label id="drop" class="drop" for="file">
+        <input id="file" type="file" accept=".json,application/json">
+        <strong>Open a receipt file</strong>
+        <span class="muted">Drop a <code>.receipt.json</code> here, or click to choose one.</span>
+      </label>
+      <div class="load-side">
+        <label class="field">
+          <span>Or try an example</span>
+          <select id="sample" disabled>
+            <option value="">Choose an example…</option>
+          </select>
+        </label>
+        <details class="more">
+          <summary>Paste a receipt instead</summary>
+          <textarea id="paste" rows="5" spellcheck="false" placeholder='{"format": "hemi-agent-receipt", …}'></textarea>
+          <button id="paste-go" type="button">Check pasted receipt</button>
+        </details>
+      </div>
+      <p id="load-error" class="error" role="alert" hidden></p>
+    </section>
+
+    <div id="results" class="results" hidden>
+      <section class="card" aria-labelledby="run-title">
+        <h2 id="run-title">The run</h2>
+        <p id="run-subtitle" class="muted"></p>
+        <div id="run"></div>
+      </section>
+
+      <section class="card card-check" aria-labelledby="check-title">
+        <h2 id="check-title" class="sr-only">Is it real?</h2>
+        <p id="notice" class="notice" hidden></p>
+        <div id="verdict" class="verdict" aria-live="polite"></div>
+        <div id="ladder" class="block"></div>
+        <div id="checks" class="block"></div>
+        <div id="proof" class="block"></div>
+        <div id="tech" class="block"></div>
+        <details id="settings" class="more settings">
+          <summary>What this page trusts</summary>
+          <label class="field">
+            <span>Registry address</span>
+            <input id="registry" spellcheck="false" autocomplete="off">
+          </label>
+          <p id="registry-source" class="muted small"></p>
+          <label class="field">
+            <span>Network address (RPC)</span>
+            <input id="rpc" spellcheck="false" autocomplete="off">
+          </label>
+          <label id="scan-row" class="check-row" hidden>
+            <input id="scan" type="checkbox">
+            <span>Also search recent Bitcoin blocks for this receipt's checkpoint. Slower: about 1.6 MB per block.</span>
+          </label>
+          <button id="recheck" type="button">Check again</button>
+        </details>
+      </section>
+    </div>
+  </main>
+
+  <footer class="foot muted small">
+    The checks run in your browser. When it can reach them, the page asks the public Hemi network and, for Bitcoin, a public Bitcoin explorer.
+    Nothing is sent to the receipts service. <a href="https://explorer.hemi.xyz" target="_blank" rel="noopener noreferrer">Hemi explorer</a> · <a href="https://testnet.explorer.hemi.xyz" target="_blank" rel="noopener noreferrer">testnet explorer</a>
+  </footer>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

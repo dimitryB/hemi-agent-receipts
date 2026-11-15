@@ -1,0 +1,9 @@
+runId     0x1ff74a22866f3e1bc6351f7b125c483122d598a178d971ff98d0115d522341a1
+stage     hemi-confirmed
+source    checked locally (Hemi RPC + Bitcoin); the service says hemi-confirmed
+hemi      block 7148344 on Hemi Testnet, 11 confirmations (10 required), safe head 7148345, head 7148354
+bitcoin   unavailable: no PoP activity: no PoP payout in 18 keystone blocks sampled over the last 6 h (blocks 7146650…7148350); keystone 7148350 not searched on Bitcoin (no PoP miner addresses or block scan configured)
+anchor    batch 20 (batch), block 7148344
+tx        0x227c5f05a3ab800600f380cc9c86115cf61c76da7a0598526cfe2f7114005804
+explorer  https://testnet.explorer.hemi.xyz/tx/0x227c5f05a3ab800600f380cc9c86115cf61c76da7a0598526cfe2f7114005804
+checked   2026-11-05T15:04:35Z

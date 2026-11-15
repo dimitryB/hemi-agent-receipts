@@ -1,0 +1,29 @@
+[
+  {
+    "file": "demo/mainnet-smoke-20261113T022336Z/manifest-1.json",
+    "runId": "0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-confirmed",
+    "receiptUrl": "http://127.0.0.1:8789/receipts/0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2",
+    "receiptFile": "demo/mainnet-smoke-20261113T022336Z/receipts/0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2.receipt.json"
+  },
+  {
+    "file": "demo/mainnet-smoke-20261113T022336Z/manifest-2.json",
+    "runId": "0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-confirmed",
+    "receiptUrl": "http://127.0.0.1:8789/receipts/0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d",
+    "receiptFile": "demo/mainnet-smoke-20261113T022336Z/receipts/0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d.receipt.json"
+  },
+  {
+    "file": "demo/mainnet-smoke-20261113T022336Z/manifest-3.json",
+    "runId": "0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-confirmed",
+    "receiptUrl": "http://127.0.0.1:8789/receipts/0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b",
+    "receiptFile": "demo/mainnet-smoke-20261113T022336Z/receipts/0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b.receipt.json"
+  }
+]

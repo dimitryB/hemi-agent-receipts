@@ -1,0 +1,77 @@
+{
+  "format": "hemi-agent-receipt",
+  "formatVersion": 1,
+  "chainId": 743111,
+  "registry": "0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe",
+  "receipt": {
+    "runId": "0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74",
+    "manifestHash": "0xf4c3768245502b8bc3beca4bb6a9d254982d4def2511483920e1936688fcf605",
+    "agent": "0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19",
+    "principal": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+    "schemaVersion": 1
+  },
+  "agentSignature": "0xdc47ce144a069314c46f3c8ece31bfcce82d560d2b688a1cb305a56b29a2350379144c97db81da28aabccc14f7b2d7729317be7d883d31d5a3d07d8de26e990a1b",
+  "anchor": {
+    "mode": "batch",
+    "batchId": 1,
+    "root": "0x6566516d7819d1bee32d01d07bcfa3de698d0835c4c34cbb44c51b75bfa0d4c9",
+    "proof": [
+      "0x1693779aeacc5af58d7c3551fac0a409dcf3cfa945411e9825b1880072f64b7a",
+      "0xf485313444cdcb66f025d1fc26984eff657d2f0bc6967b4a15db4e119af98e5d"
+    ],
+    "txHash": "0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c",
+    "blockNumber": 7100834
+  },
+  "manifest": {
+    "receiptVersion": 1,
+    "runId": "0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74",
+    "agent": "0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19",
+    "principal": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+    "startedAt": 1793282531,
+    "endedAt": 1793282642,
+    "model": "claude-fable-5-1",
+    "promptHash": "0x378891831b96ef8f2a1835ffc7767635e8ad5f4c01ff6d83b7ec6dfdac7f725a",
+    "outputHash": "0x05b271693c3a5db1c18bfdb5923a079835005798cfbc20b0c973ec25d699ec31",
+    "toolCalls": [
+      {
+        "name": "web_search",
+        "argsHash": "0x9fa12794f27cb3665fa762e03c83e3d59292f167850e02cc74fbae7c12468bac",
+        "resultHash": "0x2f49ce433aaaa41d57931b53b11f58a16ca9db4ddb13488b6b1383b95f45b89b",
+        "at": 1793282534
+      },
+      {
+        "name": "fetch_url",
+        "argsHash": "0x505fbbe2c7ad43209a9e998b793a9279983395754b9e24282035ea637cfb813a",
+        "resultHash": "0x01eeefa7aa872fbb565eb113e4a9077de95364814b5d6055ed78bdfd74ef9bc7",
+        "at": 1793282541
+      },
+      {
+        "name": "rpc_call",
+        "argsHash": "0x717efe5afc104f0cc35651ad02d06e42897dd327cc2e457d3416b9818a4cda15",
+        "resultHash": "0x9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658",
+        "at": 1793282556
+      },
+      {
+        "name": "run_python",
+        "argsHash": "0xbc134998a9de1e2b5a6399d95bff34799a0dd55578ca94db82129423beafbdd8",
+        "resultHash": "0x67349294c49f7eeeed69ffee64ef4c78551d9196472a08ee79a746bd0077f228",
+        "at": 1793282589
+      }
+    ],
+    "spend": [
+      {
+        "asset": "eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443",
+        "amount": "1000",
+        "txHash": "0x16566645a8ddbc2aff315d0b86c26bc9207842dcf903a637412898b910593551"
+      },
+      {
+        "asset": "usd",
+        "amount": "0.0137"
+      }
+    ],
+    "tags": [
+      "research",
+      "hemi-pop"
+    ]
+  }
+}

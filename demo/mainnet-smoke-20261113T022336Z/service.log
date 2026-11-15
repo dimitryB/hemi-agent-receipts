@@ -1,0 +1,10 @@
+2026-11-13T02:23:38.277Z INFO  service started url=http://127.0.0.1:8789 chainId=43111 latestBlock=5722492 registry=0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 serviceSigner=0xcFD277613FcB5d6A7B2BFcA93d44E78a1d3c6E0c relayer=0x0c9aCd4F85946587fC15CA55Ea9A1c48Aaee162f devFree=false finality="sdk defaultFinalityReader" batchMaxSize=64 batchMaxWaitMs=60000
+2026-11-13T02:23:38.287Z INFO  x402: facilitator ready facilitator=http://127.0.0.1:8080 network=eip155:43111
+2026-11-13T02:23:50.406Z INFO  x402: payment settled runId=0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2 tx=0x6effe1b1cfb1c294e3f6747b6f5aa1e043ae38a11de4ee8da3a69705ddcd9716 payer=0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F amount=1000 promoted=true
+2026-11-13T02:23:59.305Z INFO  x402: payment settled runId=0x22608570c3cedf74c4c530e2d4a1516090f443b4c2719213ac92027e2b55fe7d tx=0x41d25df9c1c4193d250f2acf29baa84e0c7d806145094af0c2632553a2055d0a payer=0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F amount=1000 promoted=true
+2026-11-13T02:24:15.543Z INFO  x402: payment settled runId=0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b tx=0x3309a47af2ec6d6b31876da648983ce9ea9bb5cbc40b30e397745590ec171d9c payer=0xaA3B6FF39AcB56D96dbE1F8458eF907D4FeE383F amount=1000 promoted=true
+2026-11-13T02:24:50.583Z INFO  batcher: closed batch batch=1 root=0x4fc3da21366d939d8820532deef6eb5c74b40f1ea0da68ab24c1c9b27567ad61 count=3 schemaVersion=1
+2026-11-13T02:24:51.356Z INFO  batcher: sending attestBatch batch=1 tx=0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b nonce=0 maxPriorityFeePerGas=1000000 maxFeePerGas=1000504
+2026-11-13T02:25:00.170Z INFO  batcher: batch anchored batch=1 onchainBatchId=1 block=5722499 tx=0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b count=3
+2026-11-13T02:28:17.326Z INFO  poller: batch advanced batch=1 from=hemi-included to=hemi-confirmed confirmations=17
+2026-11-13T02:28:22.335Z INFO  shutting down signal=SIGTERM

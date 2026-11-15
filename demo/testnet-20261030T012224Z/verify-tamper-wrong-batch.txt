@@ -1,0 +1,17 @@
+receipt 0x9b198a4c3d47543388630c697611115b8773eb30d09bf4ebd22281b5b03f4191
+  Hemi Testnet, registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  fail  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  fail  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  skip  status         finality stage read
+  signed by the agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 (ECDSA)
+INVALID
+  - proof does not verify against the anchor's root 0xf26e886e033f5ff2a1a5c8e0daad408073f5e97889f59f3d2d5eb9390bcb4f39: leaf 0xad981764f120966944dbcf44a54755e7d9e95e02c54a715da89207b9477d6eee with this 2-element proof hashes to a different root
+  - registry.verifyReceipt returned false: proof does not verify against batch 2's root 0xf26e886e033f5ff2a1a5c8e0daad408073f5e97889f59f3d2d5eb9390bcb4f39

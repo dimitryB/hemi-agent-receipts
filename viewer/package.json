@@ -1,0 +1,23 @@
+{
+  "name": "@hemi-receipts/viewer",
+  "version": "0.1.0",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "description": "Single-page receipt viewer: verifies a receipt file in the browser against Hemi and shows it in plain language",
+  "scripts": {
+    "build": "node build.mjs",
+    "build:artifact": "node build.mjs && node build-artifact.mjs",
+    "record": "node record.mjs",
+    "serve": "node serve.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@hemi-receipts/sdk": "0.1.0",
+    "viem": "2.57.5"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

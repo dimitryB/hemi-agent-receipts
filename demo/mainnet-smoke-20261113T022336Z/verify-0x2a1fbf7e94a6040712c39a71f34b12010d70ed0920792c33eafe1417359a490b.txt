@@ -1,0 +1,17 @@
+receipt 0x2a1fbf7e94a6040712c39a71f34b12010d70ed0920792c33eafe1417359a490b
+  Hemi, registry 0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40 (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f (ECDSA)
+VALID: in batch 1, anchored by tx 0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b (https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b)
+  stage hemi-confirmed, 19 Hemi confirmations, safe head 5722513
+  bitcoin not on Bitcoin yet; ESTIMATE: published by ~2026-11-13T02:40:11Z, final by ~2026-11-13T04:07:11Z (keystone 5722500 not found on Bitcoin yet; PoP is live (payout in keystone block 5722000). ESTIMATE, not verified: published by ~2026-11-13T02:40:11Z (p50; p90 2026-11-13T04:54:11Z), final by ~2026-11-13T04:07:11Z (p50; p90 2026-11-13T06:38:11Z))

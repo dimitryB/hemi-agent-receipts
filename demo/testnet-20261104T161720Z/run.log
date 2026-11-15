@@ -1,0 +1,171 @@
+
+[demo] 1. docker compose up (service against registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe on Hemi testnet)
+time="2026-11-04T11:17:20-05:00" level=warning msg="buildx Docker CLI plugin not found: falling back to the classic builder. BuildKit-only build features (multi-arch, secrets, ssh, additional contexts, ...) will not be available"
+ Image hemi-agent-receipts-service:local Building 
+ Image hemi-agent-receipts-service:local Building 
+Sending build context to Docker daemon  524.5kBSending build context to Docker daemon  1.324MB
+Step 1/40 : FROM node:22-slim AS build
+ ---> 4b150b48b411
+Step 2/40 : WORKDIR /app
+ ---> Using cache
+ ---> 19cffe614bfc
+Step 3/40 : ENV NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
+ ---> Using cache
+ ---> e5cc6de28d6a
+Step 4/40 : COPY package.json package-lock.json .npmrc tsconfig.base.json ./
+ ---> Using cache
+ ---> 100921ff6a98
+Step 5/40 : COPY contracts/package.json contracts/
+ ---> Using cache
+ ---> 8bedd32d7527
+Step 6/40 : COPY sdk/package.json sdk/
+ ---> Using cache
+ ---> b6aa45fb2fa9
+Step 7/40 : COPY cli/package.json cli/
+ ---> Using cache
+ ---> ac7c12b33bbf
+Step 8/40 : COPY service/package.json service/
+ ---> Using cache
+ ---> 78ab4ea87599
+Step 9/40 : COPY e2e/package.json e2e/
+ ---> Using cache
+ ---> 948109af0b4c
+Step 10/40 : RUN npm ci --workspace sdk --workspace service --include-workspace-root
+ ---> Using cache
+ ---> 32922420cc6b
+Step 11/40 : COPY sdk/ sdk/
+ ---> Using cache
+ ---> b6a64479875b
+Step 12/40 : COPY service/ service/
+ ---> Using cache
+ ---> 3fa1e4283562
+Step 13/40 : RUN npm run build -w sdk && npm run build -w service
+ ---> Using cache
+ ---> c3b1d3d9389a
+Step 14/40 : FROM node:22-slim AS prod-deps
+ ---> 4b150b48b411
+Step 15/40 : WORKDIR /app
+ ---> Using cache
+ ---> 19cffe614bfc
+Step 16/40 : ENV NPM_CONFIG_UPDATE_NOTIFIER=false NPM_CONFIG_FUND=false NPM_CONFIG_AUDIT=false
+ ---> Using cache
+ ---> e5cc6de28d6a
+Step 17/40 : COPY package.json package-lock.json .npmrc ./
+ ---> Using cache
+ ---> a368ad38c68f
+Step 18/40 : COPY contracts/package.json contracts/
+ ---> Using cache
+ ---> 88e3fc656179
+Step 19/40 : COPY sdk/package.json sdk/
+ ---> Using cache
+ ---> 9c15811993e4
+Step 20/40 : COPY cli/package.json cli/
+ ---> Using cache
+ ---> a868164d00b4
+Step 21/40 : COPY service/package.json service/
+ ---> Using cache
+ ---> 250fc3d74cff
+Step 22/40 : COPY e2e/package.json e2e/
+ ---> Using cache
+ ---> 13d0cf27df5f
+Step 23/40 : RUN npm ci --workspace sdk --workspace service --omit=dev
+ ---> Using cache
+ ---> 6812c080a370
+Step 24/40 : FROM node:22-slim
+ ---> 4b150b48b411
+Step 25/40 : ENV NODE_ENV=production DB_PATH=/data/receipts.sqlite PORT=8787 HOST=0.0.0.0
+ ---> Using cache
+ ---> fedd8d38ffcb
+Step 26/40 : WORKDIR /app
+ ---> Using cache
+ ---> 1e60a79cd28b
+Step 27/40 : COPY --from=prod-deps /app/node_modules ./node_modules
+ ---> Using cache
+ ---> 858714488d9b
+Step 28/40 : COPY --from=build /app/package.json ./
+ ---> Using cache
+ ---> 4c2204bf1816
+Step 29/40 : COPY --from=build /app/sdk/package.json sdk/
+ ---> Using cache
+ ---> a1fd3837ce9e
+Step 30/40 : COPY --from=build /app/sdk/dist sdk/dist
+ ---> Using cache
+ ---> 4782b8180461
+Step 31/40 : COPY --from=build /app/service/package.json service/
+ ---> Using cache
+ ---> 311b0839b99a
+Step 32/40 : COPY --from=build /app/service/dist service/dist
+ ---> Using cache
+ ---> 9c75915a0961
+Step 33/40 : COPY --from=build /app/service/migrations service/migrations
+ ---> Using cache
+ ---> 69781afbd5b6
+Step 34/40 : RUN mkdir -p /data && chown node:node /data
+ ---> Using cache
+ ---> d4741b6233f6
+Step 35/40 : USER node
+ ---> Using cache
+ ---> 2b04528529c7
+Step 36/40 : VOLUME ["/data"]
+ ---> Using cache
+ ---> 23170abf6403
+Step 37/40 : EXPOSE 8787
+ ---> Using cache
+ ---> d6e680fe5a80
+Step 38/40 : HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3   CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+ ---> Using cache
+ ---> 85813b616808
+Step 39/40 : CMD ["node", "--disable-warning=ExperimentalWarning", "service/dist/index.js"]
+ ---> Using cache
+ ---> 17b0e02abe99
+Step 40/40 : LABEL com.docker.compose.image.builder=classic
+ ---> Using cache
+ ---> 9943e29f0b9d
+Successfully built 9943e29f0b9d
+Successfully tagged hemi-agent-receipts-service:local
+ Image hemi-agent-receipts-service:local Built 
+ Image hemi-agent-receipts-service:local Built 
+ Container hemi-agent-receipts-receipts-1 Recreate 
+ Container hemi-agent-receipts-receipts-1 Recreated 
+ Container hemi-agent-receipts-receipts-1 Starting 
+ Container hemi-agent-receipts-receipts-1 Started 
+{"ok":true,"chainId":743111,"registry":"0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe","serviceSigner":"0xdd801e02554E08f00F3F833CF08C9cb9B70FeA39","relayer":"0xACadCDeE87cDbf94d440fe10E10371F8865AC22d","devFree":true}
+
+[demo] 2. three fresh manifests from examples/trace.jsonl (agent 0x4C942E2C9ce38Ba8073E9D3fB5F4C2041E3A4E19)
+wrote demo/testnet-20261104T161720Z/manifest-1.json
+runId 0x63cc4d3f8983f5d51107ce4cf057130d0b349df302400aaabc2f804ee7eba3ed  manifestHash 0x8561f074505fa7dd87e148555648c16b06198eb55ffca356e404af7acf84308e  (4 tool calls, 2 spend)
+wrote demo/testnet-20261104T161720Z/manifest-2.json
+runId 0x72cc8f9924892c72454313276d9c1da3e99d3d891cbc975e94d349a9ce04e121  manifestHash 0x69c358621dd8b704f5772d044b38fed55a154968eb99d81602a3108dbcb759e5  (4 tool calls, 2 spend)
+wrote demo/testnet-20261104T161720Z/manifest-3.json
+runId 0x0fb4fa59c886310d28010dfa341635be6f0aa3e91dbe4b7cca281ddb698eb5ee  manifestHash 0x8f98052acc3830a42a0bf9e1a8e06a16c1f3c31db8be4d17dff95c5c6a27f94d  (4 tool calls, 2 spend)
+
+[demo] 3. receipts attest (waits for the batch to be mined; batches close after 60 s)
+[
+  {
+    "file": "demo/testnet-20261104T161720Z/manifest-1.json",
+    "runId": "0x63cc4d3f8983f5d51107ce4cf057130d0b349df302400aaabc2f804ee7eba3ed",
+    "httpStatus": 202,
+    "created": true,
+    "status": "pending",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0x63cc4d3f8983f5d51107ce4cf057130d0b349df302400aaabc2f804ee7eba3ed",
+    "error": "timed out after 600s waiting for 0x63cc4d3f8983f5d51107ce4cf057130d0b349df302400aaabc2f804ee7eba3ed to reach hemi-included (still pending)"
+  },
+  {
+    "file": "demo/testnet-20261104T161720Z/manifest-2.json",
+    "runId": "0x72cc8f9924892c72454313276d9c1da3e99d3d891cbc975e94d349a9ce04e121",
+    "httpStatus": 202,
+    "created": true,
+    "status": "pending",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0x72cc8f9924892c72454313276d9c1da3e99d3d891cbc975e94d349a9ce04e121",
+    "error": "timed out after 600s waiting for 0x72cc8f9924892c72454313276d9c1da3e99d3d891cbc975e94d349a9ce04e121 to reach hemi-included (still pending)"
+  },
+  {
+    "file": "demo/testnet-20261104T161720Z/manifest-3.json",
+    "runId": "0x0fb4fa59c886310d28010dfa341635be6f0aa3e91dbe4b7cca281ddb698eb5ee",
+    "httpStatus": 202,
+    "created": true,
+    "status": "pending",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0x0fb4fa59c886310d28010dfa341635be6f0aa3e91dbe4b7cca281ddb698eb5ee",
+    "error": "timed out after 600s waiting for 0x0fb4fa59c886310d28010dfa341635be6f0aa3e91dbe4b7cca281ddb698eb5ee to reach hemi-included (still pending)"
+  }
+]

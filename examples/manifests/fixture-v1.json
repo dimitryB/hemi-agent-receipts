@@ -1,0 +1,41 @@
+{
+  "receiptVersion": 1,
+  "runId": "0xc394538091d41054baa94d9978dc6ff1df69c1a3b2c9feef92f8cc737549fe6d",
+  "agent": "0xf39fd6e51aad88f6f4ce6ab8827279cfffb92266",
+  "principal": "0x70997970c51812dc3a010c7d01b50e0d17dc79c8",
+  "startedAt": 1793300000,
+  "endedAt": 1793300042,
+  "model": "claude-fable-5-1",
+  "promptHash": "0xe119c207261b4b41498281159f8542fa35fb8aba3c5765e79c3622aad5e2cead",
+  "outputHash": "0x646252758ce5d625d7f0d0bc25ffae7426fcecfbf26ebe6233416841e4d422cf",
+  "toolCalls": [
+    {
+      "name": "web_search",
+      "argsHash": "0x6b59c4e40fc677838fc9aebae1b36a94237de1e313209b7831bcad4d226b80ba",
+      "resultHash": "0xb1b14db98415affedd717ff9934035308b2480062b2511a3b8c36ad087ee7773",
+      "at": 1793300010
+    },
+    {
+      "name": "fetch_url",
+      "argsHash": "0xfaa6395d23a45d867acef7d3de5ebfb5bc3b875dd06c80375b0190b9651e3e89",
+      "resultHash": "0xf6790f00856d327307073e7a9bbcf7c7fee9606c057498f38b5617ca4f2b5c5b",
+      "at": 1793300025
+    }
+  ],
+  "spend": [
+    {
+      "asset": "eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443",
+      "amount": "1000",
+      "txHash": "0x0bca64a7f81d3472697852739ab6cb005ff5b08de82c727c997f7e137e3fb6c5"
+    },
+    {
+      "asset": "usd",
+      "amount": "0.0042"
+    }
+  ],
+  "parentRunId": "0x7ae72dd049a4c6b29b95e8c30e8a3161ae2eed8a5fe4f78267ca307a01214d1b",
+  "tags": [
+    "fixture",
+    "café"
+  ]
+}

@@ -1,0 +1,126 @@
+[demo] 1. docker compose up (service against registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe on Hemi testnet)
+{"ok":true,"chainId":743111,"registry":"0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe","serviceSigner":"0xdd801e02554E08f00F3F833CF08C9cb9B70FeA39","relayer":"0xACadCDeE87cDbf94d440fe10E10371F8865AC22d","devFree":true}
+[demo] 2. three fresh manifests from examples/trace.jsonl (agent 0x4C942E2C9ce38Ba8073E9D3fB5F4C2041E3A4E19)
+wrote demo/testnet-20261030T003831Z/manifest-1.json
+runId 0xaf6750aa6c9ff8f7fb46556223fc264543875faf9758e248e0abbd036d0e3dd8  manifestHash 0xbdb82cded6fff1a857c5366aa4d45b969f1ae6c42572293822cf46b51f0f2170  (4 tool calls, 2 spend)
+wrote demo/testnet-20261030T003831Z/manifest-2.json
+runId 0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74  manifestHash 0xf4c3768245502b8bc3beca4bb6a9d254982d4def2511483920e1936688fcf605  (4 tool calls, 2 spend)
+wrote demo/testnet-20261030T003831Z/manifest-3.json
+runId 0xd1053cce11a6efe920105ec6a4b4160cbe961b4adb2fe1034bf910752080339a  manifestHash 0x7bac2c9b36b299f9b8eee52eddead355210451a2af2dbe8d99bd04dc971c29bc  (4 tool calls, 2 spend)
+[demo] 3. receipts attest (waits for the batch to be mined; batches close after 60 s)
+[
+  {
+    "file": "demo/testnet-20261030T003831Z/manifest-1.json",
+    "runId": "0xaf6750aa6c9ff8f7fb46556223fc264543875faf9758e248e0abbd036d0e3dd8",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-included",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0xaf6750aa6c9ff8f7fb46556223fc264543875faf9758e248e0abbd036d0e3dd8",
+    "receiptFile": "demo/testnet-20261030T003831Z/receipts/0xaf6750aa6c9ff8f7fb46556223fc264543875faf9758e248e0abbd036d0e3dd8.receipt.json"
+  },
+  {
+    "file": "demo/testnet-20261030T003831Z/manifest-2.json",
+    "runId": "0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-included",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74",
+    "receiptFile": "demo/testnet-20261030T003831Z/receipts/0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74.receipt.json"
+  },
+  {
+    "file": "demo/testnet-20261030T003831Z/manifest-3.json",
+    "runId": "0xd1053cce11a6efe920105ec6a4b4160cbe961b4adb2fe1034bf910752080339a",
+    "httpStatus": 202,
+    "created": true,
+    "status": "hemi-included",
+    "receiptUrl": "http://127.0.0.1:8787/receipts/0xd1053cce11a6efe920105ec6a4b4160cbe961b4adb2fe1034bf910752080339a",
+    "receiptFile": "demo/testnet-20261030T003831Z/receipts/0xd1053cce11a6efe920105ec6a4b4160cbe961b4adb2fe1034bf910752080339a.receipt.json"
+  }
+]
+[demo] 4. one BatchAttested tx contains all three
+tx      0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+explorer https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+batch   1: (0x6566516d7819d1bee32d01d07bcfa3de698d0835c4c34cbb44c51b75bfa0d4c9, 3, 1, false, 0xdd801e02554E08f00F3F833CF08C9cb9B70FeA39, 1793320824 [1.793e9], 7100834 [7.1e6])
+{"status":"0x1","blockNumber":"0x6c59a2","gasUsed":"0x252da","logs":1}
+[demo] 5. receipts status, until each is at least hemi-confirmed
+runId     0xaf6750aa6c9ff8f7fb46556223fc264543875faf9758e248e0abbd036d0e3dd8
+stage     hemi-confirmed
+source    checked locally (Hemi RPC + Bitcoin); the service says hemi-confirmed
+hemi      block 7100834 on Hemi Testnet, 10 confirmations (10 required), safe head 7100839, head 7100843
+bitcoin   unavailable: no PoP activity: no PoP payout in the last 6 keystone blocks (blocks 7100700…7100825); covering keystone 7100850 is not produced yet (latest Hemi block 7100843)
+anchor    batch 1 (batch), block 7100834
+tx        0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+explorer  https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+checked   2026-10-30T00:42:23Z
+runId     0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74
+stage     hemi-confirmed
+source    checked locally (Hemi RPC + Bitcoin); the service says hemi-confirmed
+hemi      block 7100834 on Hemi Testnet, 11 confirmations (10 required), safe head 7100839, head 7100844
+bitcoin   unavailable: no PoP activity: no PoP payout in the last 6 keystone blocks (blocks 7100700…7100825); covering keystone 7100850 is not produced yet (latest Hemi block 7100844)
+anchor    batch 1 (batch), block 7100834
+tx        0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+explorer  https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+checked   2026-10-30T00:42:26Z
+runId     0xd1053cce11a6efe920105ec6a4b4160cbe961b4adb2fe1034bf910752080339a
+stage     hemi-confirmed
+source    checked locally (Hemi RPC + Bitcoin); the service says hemi-confirmed
+hemi      block 7100834 on Hemi Testnet, 11 confirmations (10 required), safe head 7100839, head 7100844
+bitcoin   unavailable: no PoP activity: no PoP payout in the last 6 keystone blocks (blocks 7100700…7100825); covering keystone 7100850 is not produced yet (latest Hemi block 7100844)
+anchor    batch 1 (batch), block 7100834
+tx        0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+explorer  https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c
+checked   2026-10-30T00:42:30Z
+[demo] 6. stop the service, then verify with only an RPC and the registry address
+receipt 0x51f8b875fe2b416015449e42d840fedccd1bb997c3ff600d26f0fceb923bed74
+  Hemi Testnet, registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 (ECDSA)
+VALID: in batch 1, anchored by tx 0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c (https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c)
+  stage hemi-confirmed, 11 Hemi confirmations, safe head 7100839
+  bitcoin unavailable: no PoP activity: no PoP payout in the last 6 keystone blocks (blocks 7100700…7100825); covering keystone 7100850 is not produced yet (latest Hemi block 7100844)
+receipt 0xaf6750aa6c9ff8f7fb46556223fc264543875faf9758e248e0abbd036d0e3dd8
+  Hemi Testnet, registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 (ECDSA)
+VALID: in batch 1, anchored by tx 0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c (https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c)
+  stage hemi-confirmed, 11 Hemi confirmations, safe head 7100839
+  bitcoin unavailable: no PoP activity: no PoP payout in the last 6 keystone blocks (blocks 7100700…7100825); covering keystone 7100850 is not produced yet (latest Hemi block 7100844)
+receipt 0xd1053cce11a6efe920105ec6a4b4160cbe961b4adb2fe1034bf910752080339a
+  Hemi Testnet, registry 0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe (--registry)
+  pass  file           well-formed receipt file
+  pass  registry       file's registry is the one you trust
+  pass  chainId        RPC serves the receipt's chain
+  pass  manifest       manifest re-hashes to manifestHash and matches the receipt
+  pass  agentSignature EIP-712 signature by the agent or principal
+  pass  anchor         receipt is anchored
+  pass  merkleProof    Merkle proof reaches the anchor's root (local)
+  pass  batch          batch exists, is live, root and schema version match
+  pass  onchainProof   registry.verifyReceipt is true
+  pass  anchorTx       anchoring tx found in the BatchAttested log
+  pass  status         finality stage read
+  signed by the agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 (ECDSA)
+VALID: in batch 1, anchored by tx 0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c (https://testnet.explorer.hemi.xyz/tx/0x595bdaf1d2f057260defaddd48f41c30b73075bd266719a0e34fa9095f895e1c)
+  stage hemi-confirmed, 12 Hemi confirmations, safe head 7100839
+  bitcoin unavailable: no PoP activity: no PoP payout in the last 6 keystone blocks (blocks 7100700…7100825); covering keystone 7100850 is not produced yet (latest Hemi block 7100845)
+[demo] done: demo/testnet-20261030T003831Z
+EXIT=0

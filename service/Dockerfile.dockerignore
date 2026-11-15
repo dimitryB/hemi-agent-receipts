@@ -1,0 +1,23 @@
+# Used by BuildKit for service/Dockerfile (context: repo root). Allow-list only.
+**
+!package.json
+!package-lock.json
+!.npmrc
+!tsconfig.base.json
+!contracts/package.json
+!cli/package.json
+!e2e/package.json
+!sdk/package.json
+!sdk/tsconfig.json
+!sdk/tsconfig.build.json
+!sdk/src/**
+!service/package.json
+!service/tsconfig.json
+!service/tsconfig.build.json
+!service/src/**
+!service/migrations/**
+# Secrets never enter the build context, whatever is allowed above (later lines win).
+.env
+.env.*
+.secrets
+**/.secrets

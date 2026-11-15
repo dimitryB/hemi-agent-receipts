@@ -1,0 +1,21 @@
+# Build-context hygiene for any Dockerfile built from the repo root (the classic builder
+# reads only this file; BuildKit prefers <Dockerfile>.dockerignore, e.g. service/Dockerfile.dockerignore).
+# Never send secrets, dependencies or build output to the daemon.
+.env
+.env.*
+!.env.example
+**/node_modules
+**/dist
+**/data
+**/*.sqlite
+**/*.sqlite-*
+.git
+contracts/artifacts
+contracts/cache
+contracts/types
+contracts/coverage
+**/.DS_Store
+**/*.log
+.npm-install.lock
+.secrets
+**/.secrets

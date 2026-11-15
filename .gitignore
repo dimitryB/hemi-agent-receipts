@@ -1,0 +1,20 @@
+node_modules/
+dist/
+.env
+*.sqlite
+*.sqlite-journal
+*.sqlite-wal
+*.sqlite-shm
+data/
+contracts/artifacts/
+contracts/cache/
+contracts/types/
+contracts/coverage/
+contracts/ignition/deployments/chain-31337/
+contracts/ignition/parameters/hemi-mainnet.json
+.DS_Store
+*.log
+.npm-install.lock/
+.secrets/
+# demo evidence logs are committed
+!demo/**/*.log

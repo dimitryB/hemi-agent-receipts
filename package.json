@@ -1,0 +1,33 @@
+{
+  "name": "hemi-agent-receipts",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "contracts",
+    "sdk",
+    "cli",
+    "service",
+    "e2e",
+    "viewer"
+  ],
+  "engines": {
+    "node": ">=22.18"
+  },
+  "scripts": {
+    "build": "npm run build -w sdk && npm run build -w cli && npm run build -w service && npm run build -w viewer",
+    "typecheck": "npm run typecheck -w contracts -w sdk -w cli -w service -w e2e -w viewer",
+    "test:contracts": "npm test -w contracts",
+    "test:sdk": "npm test -w sdk",
+    "test:cli": "npm test -w cli",
+    "test:service": "npm test -w service",
+    "test:e2e": "npm test -w e2e",
+    "test": "npm run build && npm run test:contracts && npm run test:sdk && npm run test:cli && npm run test:service && npm run test:viewer && npm run test:e2e",
+    "test:viewer": "npm test -w viewer"
+  },
+  "devDependencies": {
+    "@types/node": "22.20.5",
+    "tsx": "4.23.15",
+    "typescript": "6.0.3"
+  }
+}

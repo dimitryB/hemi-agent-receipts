@@ -1,0 +1,52 @@
+[demo] 1/6 forking Hemi testnet and mainnet (the facilitator project's scripts/fork.sh)
+[fork] testnet fork up on :8545 (pid 89487)
+[fork] mainnet fork up on :8546 (pid 89533)
+[fork] testnet fork: deploying canonical contracts
+[fork]   permit2 already at 0x000000000022D473030F116dDEE9F6B43aC78BA3
+[fork]   validator6492 already at 0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B
+[fork]   exact-proxy already at 0x402085c248EeA27D92E8b30b2C58ed07f9E20001
+[fork] mainnet fork: deploying canonical contracts
+[fork]   permit2 already at 0x000000000022D473030F116dDEE9F6B43aC78BA3
+[fork]   validator6492 already at 0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B
+[fork]   exact-proxy already at 0x402085c248EeA27D92E8b30b2C58ed07f9E20001
+[fork] funding buyer
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 1000000000 base units of USDC.e
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 100000000000 base units of hBTC
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 1000000000 base units of USDC.e
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 100000000000 base units of hemiBTC
+[fork] testnet fork: Bitcoin settler
+[fork]   mock hBK placed at 0xeC9fa5daC1118963933e1A675a4EEA0009b7f215
+[fork]   HbkTestnetAdapter at 0x5FbDB2315678afecb367f032d93F642f64180aa3
+[fork]   X402BtcSettler at 0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512 (SETTLER 0x70997970C51812dc3A010C7d01b50e0d17dc79C8, offset 0)
+[fork] mainnet fork: Bitcoin settler
+[fork]   mock hBK placed at 0x7007dd1C09527B92AEcd8Ae6570B73d09E0B8F12
+[fork]   X402BtcSettler at 0x5FbDB2315678afecb367f032d93F642f64180aa3 (SETTLER 0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC, offset 0)
+[fork] settler addresses for compose: /var/folders/zz/1y02rrps2jbbz5s7p2qfb6pc0000gn/T/receipts-x402-demo.xDJoZ0p9ys/fork/btc-settlers.env
+[fork] ready: testnet fork http://127.0.0.1:8545  mainnet fork http://127.0.0.1:8546
+[demo] 2/6 starting the Brief A facilitator against the forks
+ Network x402facilitator_default Creating 
+ Network x402facilitator_default Creating 
+ Network x402facilitator_default Created 
+ Network x402facilitator_default Created 
+ Container x402facilitator-facilitator-1 Creating 
+ Container x402facilitator-facilitator-1 Created 
+ Container x402facilitator-facilitator-1 Starting 
+ Container x402facilitator-facilitator-1 Started 
+[{"scheme":"exact","network":"eip155:43111"},{"scheme":"exact","network":"eip155:743111"}]
+[demo] 3/6 deploying ReceiptRegistry on the testnet fork
+npm warn Unknown user config "always-auth". This will stop working in the next major version of npm. See `npm help npmrc` for supported config options.
+[demo] registry 0x9fe46736679d2d9a65f0992f2272de9f3c7fa6e0 (block 7201829)
+[demo] 4/6 starting the receipts service with x402 on (DEV_FREE unset)
+{"ok":true,"chainId":743111,"registry":"0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0","devFree":false}
+[demo] 5/6 attesting a fresh manifest; the CLI pays the 402 with x402 (Permit2, USDC.e)
+wrote /var/folders/zz/1y02rrps2jbbz5s7p2qfb6pc0000gn/T/receipts-x402-demo.xDJoZ0p9ys/manifest.json
+runId 0x8ea1f3c626e69ef6379a15cc60ade28b933e753e87158d681ac5b0e286bc9368  manifestHash 0x07fdeff1a680e55051a211fb33192591e8fc87d61f3953dc2adf5ed4c2a9ae2b  (4 tool calls, 2 spend)
+paying 1000 base units of 0xD47971C7F5B1067d25cd45d30b2c9eb60de96443 on eip155:743111 to 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc from 0x90F79bf6EB2c4f870365E785982E1f101E93b906 (x402 permit2)
+approve(Permit2, max) sent: 0xede165f643d2ebb9f452940bd92fad1d2c50dff0b04d104e2518ffceca1d4d90
+0x8ea1f3c626e69ef6379a15cc60ade28b933e753e87158d681ac5b0e286bc9368 hemi-included
+wrote /var/folders/zz/1y02rrps2jbbz5s7p2qfb6pc0000gn/T/receipts-x402-demo.xDJoZ0p9ys/receipts/0x8ea1f3c626e69ef6379a15cc60ade28b933e753e87158d681ac5b0e286bc9368.receipt.json
+[demo] 6/6 results
+payTo USDC.e base units: 0 -> 1000 (price 1000)
+2026-11-13T01:19:16.420Z INFO  x402: payment settled runId=0x8ea1f3c626e69ef6379a15cc60ade28b933e753e87158d681ac5b0e286bc9368 tx=0x716204ed45573455713da3140cbc3f30f19dbc9ac1694e0ca9b4f46d0bf0c3b1 payer=0x90F79bf6EB2c4f870365E785982E1f101E93b906 amount=1000 promoted=true
+{"runId":"0x8ea1f3c626e69ef6379a15cc60ade28b933e753e87158d681ac5b0e286bc9368","anchor":{"batchId":1,"txHash":"0xe070e6c32e684ea4d6237422f456126faf36cf4428d9f79f26304fde9aea4f01"}}
+[demo] settled through the Brief A facilitator and anchored

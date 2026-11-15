@@ -1,0 +1,52 @@
+{
+  "receiptVersion": 1,
+  "runId": "0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2",
+  "agent": "0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f",
+  "principal": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+  "startedAt": 1793282531,
+  "endedAt": 1793282642,
+  "model": "claude-fable-5-1",
+  "promptHash": "0x378891831b96ef8f2a1835ffc7767635e8ad5f4c01ff6d83b7ec6dfdac7f725a",
+  "outputHash": "0x05b271693c3a5db1c18bfdb5923a079835005798cfbc20b0c973ec25d699ec31",
+  "toolCalls": [
+    {
+      "name": "web_search",
+      "argsHash": "0x9fa12794f27cb3665fa762e03c83e3d59292f167850e02cc74fbae7c12468bac",
+      "resultHash": "0x2f49ce433aaaa41d57931b53b11f58a16ca9db4ddb13488b6b1383b95f45b89b",
+      "at": 1793282534
+    },
+    {
+      "name": "fetch_url",
+      "argsHash": "0x505fbbe2c7ad43209a9e998b793a9279983395754b9e24282035ea637cfb813a",
+      "resultHash": "0x01eeefa7aa872fbb565eb113e4a9077de95364814b5d6055ed78bdfd74ef9bc7",
+      "at": 1793282541
+    },
+    {
+      "name": "rpc_call",
+      "argsHash": "0x717efe5afc104f0cc35651ad02d06e42897dd327cc2e457d3416b9818a4cda15",
+      "resultHash": "0x9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658",
+      "at": 1793282556
+    },
+    {
+      "name": "run_python",
+      "argsHash": "0xbc134998a9de1e2b5a6399d95bff34799a0dd55578ca94db82129423beafbdd8",
+      "resultHash": "0x67349294c49f7eeeed69ffee64ef4c78551d9196472a08ee79a746bd0077f228",
+      "at": 1793282589
+    }
+  ],
+  "spend": [
+    {
+      "asset": "eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443",
+      "amount": "1000",
+      "txHash": "0x16566645a8ddbc2aff315d0b86c26bc9207842dcf903a637412898b910593551"
+    },
+    {
+      "asset": "usd",
+      "amount": "0.0137"
+    }
+  ],
+  "tags": [
+    "research",
+    "hemi-pop"
+  ]
+}

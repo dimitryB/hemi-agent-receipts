@@ -1,0 +1,41 @@
+{
+  "receiptVersion": 1,
+  "runId": "0x16ea51d0184c08f3fac806168e30f7ae994e196a108a5467cb7496c889089633",
+  "agent": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+  "principal": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+  "startedAt": 1793290600,
+  "endedAt": 1793290660,
+  "model": "claude-opus-5-5",
+  "promptHash": "0x841b65e6f62948ec86f2a46bde077acc568e5286da2312a196a6437529c2153c",
+  "outputHash": "0x5de03a343f62169db2f182e012043a4da183964cc6456de9abb64cc504821f32",
+  "toolCalls": [
+    {
+      "name": "rpc_call",
+      "argsHash": "0x419db8c2a451a87b4a92034f6f79bba65f57cd4a669eeb8ae7c353eb315c8b16",
+      "resultHash": "0x6190a2362eb614752573bec0d19070f2a9e8845c90a24e0420828378bc382684",
+      "at": 1793290605
+    },
+    {
+      "name": "web_search",
+      "argsHash": "0xe9efa0aebbe7ab6fef0f1b622154af4b8fb252fe1a937f9344d61709920b0e4e",
+      "resultHash": "0xb1b14db98415affedd717ff9934035308b2480062b2511a3b8c36ad087ee7773",
+      "at": 1793290615
+    },
+    {
+      "name": "fetch_url",
+      "argsHash": "0x5412a73b59fae40b8a431b51ef23f555c8d31a3a8c5a9e06048c0479604516f9",
+      "resultHash": "0xf6790f00856d327307073e7a9bbcf7c7fee9606c057498f38b5617ca4f2b5c5b",
+      "at": 1793290625
+    }
+  ],
+  "spend": [
+    {
+      "asset": "eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443",
+      "amount": "1000"
+    }
+  ],
+  "tags": [
+    "demo",
+    "hemi"
+  ]
+}

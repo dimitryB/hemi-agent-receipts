@@ -1,0 +1,36 @@
+[demo] 1/6 forking Hemi testnet and mainnet (the facilitator project's scripts/fork.sh)
+[fork] testnet fork up on :8545 (pid 6512)
+[fork] mainnet fork up on :8546 (pid 6529)
+[fork] testnet fork: deploying canonical contracts
+[fork]   permit2 already at 0x000000000022D473030F116dDEE9F6B43aC78BA3
+[fork]   validator6492 already at 0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B
+[fork]   exact-proxy already at 0x402085c248EeA27D92E8b30b2C58ed07f9E20001
+[fork] mainnet fork: deploying canonical contracts
+[fork]   permit2 already at 0x000000000022D473030F116dDEE9F6B43aC78BA3
+[fork]   validator6492 deployed at 0xdAcD51A54883eb67D95FAEb2BBfdC4a9a6BD2a3B
+[fork]   exact-proxy deployed at 0x402085c248EeA27D92E8b30b2C58ed07f9E20001
+[fork] funding buyer
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 1000000000 base units of USDC.e
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 100000000000 base units of hBTC
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 1000000000 base units of USDC.e
+[fork]   buyer 0x90F79bf6EB2c4f870365E785982E1f101E93b906 holds 100000000000 base units of hemiBTC
+[fork] ready: testnet fork http://127.0.0.1:8545  mainnet fork http://127.0.0.1:8546
+[demo] 2/6 starting the Brief A facilitator against the forks
+[{"scheme":"exact","network":"eip155:43111"},{"scheme":"exact","network":"eip155:743111"}]
+[demo] 3/6 deploying ReceiptRegistry on the testnet fork
+[demo] registry 0x5fbdb2315678afecb367f032d93f642f64180aa3 (block 7100934)
+[demo] 4/6 starting the receipts service with x402 on (DEV_FREE unset)
+{"ok":true,"chainId":743111,"registry":"0x5FbDB2315678afecb367f032d93F642f64180aa3","devFree":false}
+[demo] 5/6 attesting a fresh manifest; the CLI pays the 402 with x402 (Permit2, USDC.e)
+wrote $STATE/manifest.json
+runId 0x745830507509066cf8df454295b4760051a21dd66e18096121e7f42e88bf305d  manifestHash 0xb7fe7ebdb5fa592cd6b595b9fabc31dd900c7962bbf83f26bf159d7f79bf26ae  (4 tool calls, 2 spend)
+paying 1000 base units of 0xD47971C7F5B1067d25cd45d30b2c9eb60de96443 on eip155:743111 to 0x9965507D1a55bcC2695C58ba16FB37d819B0A4dc from 0x90F79bf6EB2c4f870365E785982E1f101E93b906 (x402 permit2)
+approve(Permit2, max) sent: 0x761d8c33ae287042b8cb9d11bfca906b106d647dc68252c81ee711d261a73951
+0x745830507509066cf8df454295b4760051a21dd66e18096121e7f42e88bf305d hemi-included
+wrote $STATE/receipts/0x745830507509066cf8df454295b4760051a21dd66e18096121e7f42e88bf305d.receipt.json
+[demo] 6/6 results
+payTo USDC.e base units: 0 -> 1000 (price 1000)
+2026-10-30T01:00:42.977Z INFO  x402: payment settled runId=0x745830507509066cf8df454295b4760051a21dd66e18096121e7f42e88bf305d tx=0x17e6f5c79c1a7fa04a0693e468a6569135a8ca9bf4002a899c42c72a3989ab70 payer=0x90F79bf6EB2c4f870365E785982E1f101E93b906 amount=1000 promoted=true
+{"runId":"0x745830507509066cf8df454295b4760051a21dd66e18096121e7f42e88bf305d","anchor":{"batchId":1,"txHash":"0xc33376a7b373a7c87664318ca8ee2c0bbcbf95bcb1a7db9f4b92059d0e679cd4"}}
+[demo] settled through the Brief A facilitator and anchored; state in $STATE
+EXIT=0

@@ -1,0 +1,7 @@
+# Optional override: keep the service's SQLite database in ./data on the host instead of the
+# receipts-data volume inside Docker's VM disk. Useful when that disk is full.
+#   COMPOSE_FILE=docker-compose.yml:docker-compose.host-data.yml docker compose up -d receipts
+services:
+  receipts:
+    volumes:
+      - ./data:/data

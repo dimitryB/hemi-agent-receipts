@@ -1,0 +1,16 @@
+{
+  "receiptVersion": 1,
+  "runId": "0xa48c559e491a0ced8e5cfd54585b525163169e5a383471fe0a70826d559b0a0d",
+  "agent": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
+  "principal": "0x15d34aaf54267db7d7c367839aaf71a00a2c6a65",
+  "startedAt": 1793291200,
+  "endedAt": 1793291230,
+  "model": "claude-fable-5-1",
+  "promptHash": "0x3de371a7015afa98d9191b4f7c4739f6b6570bfcc7ddbe099db768478a1204e6",
+  "outputHash": "0x47e1c477855eeb9bd2f0a502d96822020dc3dcbaee210536b649d97f94243826",
+  "toolCalls": [],
+  "spend": [],
+  "tags": [
+    "demo"
+  ]
+}

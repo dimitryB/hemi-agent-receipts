@@ -1,0 +1,9 @@
+runId     0xf3dbf177ec4c4452a23034d3b0e0b2aa998d3602f1da88d6441597a3f987ed64
+stage     hemi-confirmed
+source    checked locally (Hemi RPC + Bitcoin); the service says hemi-confirmed
+hemi      block 7101051 on Hemi Testnet, 14 confirmations (10 required), safe head 7101060, head 7101064
+bitcoin   unavailable: no PoP activity: no PoP payout in 18 keystone blocks sampled over the last 6 h (blocks 7099350…7101050); covering keystone 7101075 is not produced yet (latest Hemi block 7101064)
+anchor    batch 3 (batch), block 7101051
+tx        0xadc7f7ba75c571e5b7afa5e1e59f39cf104b99dbe0f3008e68de859689f61550
+explorer  https://testnet.explorer.hemi.xyz/tx/0xadc7f7ba75c571e5b7afa5e1e59f39cf104b99dbe0f3008e68de859689f61550
+checked   2026-10-30T01:26:25Z

@@ -1,0 +1,116 @@
+# hemi-agent-receipts service.
+#
+#   docker compose build                      build the service image
+#   docker compose up -d receipts             run against the chain configured in .env
+#   docker compose --profile local up receipts-local
+#                                             offline demo: anvil + a one-shot registry
+#                                             deployer + the service on :8788 (DEV_FREE).
+#                                             Needs `npm run compile -w contracts` once first.
+#
+# See service/README.md and .env.example.
+
+name: hemi-agent-receipts
+
+x-service-image: &service-image
+  build:
+    context: .
+    dockerfile: service/Dockerfile
+  image: hemi-agent-receipts-service:local
+  # A small init as PID 1 forwards signals. Node as PID 1 ignores a signal it has no handler for
+  # yet, so a stop during a slow startup would wait out the whole grace period.
+  init: true
+
+x-healthcheck: &healthcheck
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  interval: 30s
+  timeout: 5s
+  retries: 3
+  start_period: 20s
+
+services:
+  receipts:
+    <<: *service-image
+    env_file:
+      - path: .env
+        required: false # without it the service refuses to start and says which variables are missing
+    environment:
+      DB_PATH: /data/receipts.sqlite
+      HOST: 0.0.0.0
+      PORT: "8787"
+    ports:
+      # Loopback only: with DEV_FREE=1 anyone who can reach the port anchors on the relayer's gas.
+      # Put a reverse proxy in front, or change this, to serve other hosts.
+      - "127.0.0.1:8787:8787"
+    volumes:
+      - receipts-data:/data
+    healthcheck: *healthcheck
+    # Gives up after 5 failed starts (e.g. a refused config) instead of restarting forever.
+    restart: on-failure:5
+    # Above the service's own drain (SHUTDOWN_DRAIN_MS), so a settling payment can finish.
+    stop_grace_period: 190s
+
+  # ---------------------------------------------------------------- offline demo (profile: local)
+  anvil:
+    profiles: [local]
+    image: ghcr.io/foundry-rs/foundry:v1.3.5
+    entrypoint: ["anvil"]
+    command: ["--host", "0.0.0.0", "--port", "8545", "--chain-id", "31337", "--block-time", "2"]
+    healthcheck:
+      test: ["CMD", "cast", "chain-id", "--rpc-url", "http://127.0.0.1:8545"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  deploy-registry:
+    <<: *service-image
+    profiles: [local]
+    command: ["node", "service/dist/tools/deploy-local.js"]
+    healthcheck:
+      disable: true
+    environment:
+      RPC_URL: http://anvil:8545
+      ARTIFACT: /artifacts/contracts/ReceiptRegistry.sol/ReceiptRegistry.json
+      # anvil's well-known dev accounts 0 (owner) and 1 (service signer). LOCAL ONLY.
+      DEPLOYER_PRIVATE_KEY: "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80"
+      SERVICE_SIGNER: "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
+      # account 0's first deployment on a fresh anvil
+      EXPECTED_ADDRESS: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+    volumes:
+      - ./contracts/artifacts:/artifacts:ro
+    depends_on:
+      anvil:
+        condition: service_healthy
+    restart: "no"
+
+  receipts-local:
+    <<: *service-image
+    profiles: [local]
+    environment:
+      CHAIN_ID: "31337"
+      HEMI_RPC_URLS: http://anvil:8545
+      REGISTRY_ADDRESS: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
+      REGISTRY_DEPLOY_BLOCK: "0"
+      # anvil dev accounts 1 (service signer) and 2 (relayer). LOCAL ONLY.
+      SERVICE_PRIVATE_KEY: "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+      RELAYER_PRIVATE_KEY: "0x5de4111afa1a4b94908f83103eb1f1706367c2e68ca870fc3fb9a804cdab365a"
+      DEV_FREE: "1"
+      BATCH_MAX_WAIT_SECONDS: "10"
+      HEMI_CONFIRMATIONS: "3"
+      POLL_INTERVAL_SECONDS: "2"
+      RPC_REQUESTS_PER_SECOND: "50"
+      DB_PATH: /data/receipts-local.sqlite
+      HOST: 0.0.0.0
+      PORT: "8787"
+    ports:
+      - "127.0.0.1:8788:8787"
+    # anvil keeps no state across restarts, so neither does the demo's database.
+    tmpfs:
+      - /data:uid=1000,gid=1000,mode=0755
+    healthcheck: *healthcheck
+    depends_on:
+      deploy-registry:
+        condition: service_completed_successfully
+    restart: on-failure:5
+
+volumes:
+  receipts-data:

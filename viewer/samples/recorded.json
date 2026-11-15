@@ -1,0 +1,297 @@
+{
+  "recordedAt": 1794699119,
+  "rpcs": {
+    "mainnet": "https://rpc.hemi.network/rpc",
+    "genuine": "https://testnet.rpc.hemi.network/rpc",
+    "private": "https://testnet.rpc.hemi.network/rpc",
+    "tampered": "https://testnet.rpc.hemi.network/rpc",
+    "forged": "https://testnet.rpc.hemi.network/rpc",
+    "wrong-batch": "https://testnet.rpc.hemi.network/rpc"
+  },
+  "results": {
+    "mainnet": {
+      "valid": true,
+      "status": {
+        "stage": "btc-final",
+        "estimated": false,
+        "hemi": {
+          "blockNumber": 5722499,
+          "blockTimestamp": 1794536699,
+          "latestBlock": 5736028,
+          "confirmations": 13530,
+          "requiredConfirmations": 10,
+          "safeBlock": 5736018
+        },
+        "btc": {
+          "coveringKeystone": 5722500,
+          "source": "bitcoin",
+          "publishedAtBtcHeight": 975836,
+          "btcConfirmations": 21,
+          "btcBlockHash": "00000000000000000000776386ebb95112c89fcfdb848151764b764480e01a0a",
+          "popTxid": "c6835b0e6675122e8ccf103d361af4ef1c7d4883d46e48c1be91a858e66c6a23",
+          "viaKeystone": 5734725,
+          "inherited": true,
+          "superFinal": true,
+          "detail": "keystone 5734725 (a descendant of covering keystone 5722500) published in Bitcoin block 975836 by tx c6835b0e6675122e8ccf103d361af4ef1c7d4883d46e48c1be91a858e66c6a23, 21 confirmations"
+        },
+        "checkedAt": 1794699058
+      },
+      "batchTx": "0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b",
+      "leaf": "0x4d865ad453775f5891a481298158bb583fe0f21c7ec670aa86863300ae30a8a9",
+      "reasons": [],
+      "problems": [],
+      "checks": {
+        "file": "pass",
+        "registry": "pass",
+        "chainId": "pass",
+        "manifest": "pass",
+        "agentSignature": "pass",
+        "anchor": "pass",
+        "merkleProof": "pass",
+        "batch": "pass",
+        "onchainProof": "pass",
+        "anchorTx": "pass",
+        "status": "pass"
+      },
+      "signer": {
+        "address": "0xaa3b6ff39acb56d96dbe1f8458ef907d4fee383f",
+        "role": "agent",
+        "method": "ecdsa"
+      },
+      "incomplete": false
+    },
+    "genuine": {
+      "valid": true,
+      "status": {
+        "stage": "hemi-confirmed",
+        "estimated": false,
+        "hemi": {
+          "blockNumber": 7101229,
+          "blockTimestamp": 1793325564,
+          "latestBlock": 7215691,
+          "confirmations": 114463,
+          "requiredConfirmations": 10,
+          "safeBlock": 7215684
+        },
+        "btc": {
+          "coveringKeystone": 7101250,
+          "source": "unavailable",
+          "popLive": false,
+          "detail": "no PoP activity: no PoP payout in 18 keystone blocks sampled over the last 6 h (blocks 7213975…7215675); keystone 7101250 not searched on Bitcoin (no PoP miner addresses or block scan configured)"
+        },
+        "checkedAt": 1794699111
+      },
+      "batchTx": "0x4b9f8a72a9aa1368e453e4015924896a1a3f0a4974a857404ef3dffa57eb3e92",
+      "leaf": "0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26",
+      "reasons": [],
+      "problems": [],
+      "checks": {
+        "file": "pass",
+        "registry": "pass",
+        "chainId": "pass",
+        "manifest": "pass",
+        "agentSignature": "pass",
+        "anchor": "pass",
+        "merkleProof": "pass",
+        "batch": "pass",
+        "onchainProof": "pass",
+        "anchorTx": "pass",
+        "status": "pass"
+      },
+      "signer": {
+        "address": "0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19",
+        "role": "agent",
+        "method": "ecdsa"
+      },
+      "incomplete": false
+    },
+    "private": {
+      "valid": true,
+      "status": {
+        "stage": "hemi-confirmed",
+        "estimated": false,
+        "hemi": {
+          "blockNumber": 7101229,
+          "blockTimestamp": 1793325564,
+          "latestBlock": 7215691,
+          "confirmations": 114463,
+          "requiredConfirmations": 10,
+          "safeBlock": 7215684
+        },
+        "btc": {
+          "coveringKeystone": 7101250,
+          "source": "unavailable",
+          "popLive": false,
+          "detail": "no PoP activity: no PoP payout in 18 keystone blocks sampled over the last 6 h (blocks 7213975…7215675); keystone 7101250 not searched on Bitcoin (no PoP miner addresses or block scan configured)"
+        },
+        "checkedAt": 1794699116
+      },
+      "batchTx": "0x4b9f8a72a9aa1368e453e4015924896a1a3f0a4974a857404ef3dffa57eb3e92",
+      "leaf": "0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26",
+      "reasons": [],
+      "problems": [],
+      "checks": {
+        "file": "pass",
+        "registry": "pass",
+        "chainId": "pass",
+        "manifest": "skip",
+        "agentSignature": "pass",
+        "anchor": "pass",
+        "merkleProof": "pass",
+        "batch": "pass",
+        "onchainProof": "pass",
+        "anchorTx": "pass",
+        "status": "pass"
+      },
+      "signer": {
+        "address": "0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19",
+        "role": "agent",
+        "method": "ecdsa"
+      },
+      "incomplete": false
+    },
+    "tampered": {
+      "valid": false,
+      "status": {
+        "stage": "hemi-confirmed",
+        "estimated": false,
+        "hemi": {
+          "blockNumber": 7101229,
+          "blockTimestamp": 1793325564,
+          "latestBlock": 7215691,
+          "confirmations": 114463,
+          "requiredConfirmations": 10,
+          "safeBlock": 7215684
+        },
+        "btc": {
+          "coveringKeystone": 7101250,
+          "source": "unavailable",
+          "popLive": false,
+          "detail": "no PoP activity: no PoP payout in 18 keystone blocks sampled over the last 6 h (blocks 7213975…7215675); keystone 7101250 not searched on Bitcoin (no PoP miner addresses or block scan configured)"
+        },
+        "checkedAt": 1794699117
+      },
+      "batchTx": "0x4b9f8a72a9aa1368e453e4015924896a1a3f0a4974a857404ef3dffa57eb3e92",
+      "leaf": "0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26",
+      "reasons": [
+        "manifest hash mismatch: the file's manifest hashes to 0x8e5a3e265d986affbeda14ad3445a732aa36971ccddcbebd4d870b16c374faeb, receipt says 0x4e825bc2e01acb1abfd76f010c33be8c140b38ba7ba886957bc7eeb6beb3ee7b"
+      ],
+      "problems": [
+        {
+          "check": "manifest",
+          "code": "manifest-hash-mismatch",
+          "message": "manifest hash mismatch: the file's manifest hashes to 0x8e5a3e265d986affbeda14ad3445a732aa36971ccddcbebd4d870b16c374faeb, receipt says 0x4e825bc2e01acb1abfd76f010c33be8c140b38ba7ba886957bc7eeb6beb3ee7b"
+        }
+      ],
+      "checks": {
+        "file": "pass",
+        "registry": "pass",
+        "chainId": "pass",
+        "manifest": "fail",
+        "agentSignature": "pass",
+        "anchor": "pass",
+        "merkleProof": "pass",
+        "batch": "pass",
+        "onchainProof": "pass",
+        "anchorTx": "pass",
+        "status": "pass"
+      },
+      "signer": {
+        "address": "0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19",
+        "role": "agent",
+        "method": "ecdsa"
+      },
+      "incomplete": false
+    },
+    "forged": {
+      "valid": false,
+      "status": {
+        "stage": "hemi-confirmed",
+        "estimated": false,
+        "hemi": {
+          "blockNumber": 7101229,
+          "blockTimestamp": 1793325564,
+          "latestBlock": 7215691,
+          "confirmations": 114463,
+          "requiredConfirmations": 10,
+          "safeBlock": 7215684
+        },
+        "btc": {
+          "coveringKeystone": 7101250,
+          "source": "unavailable",
+          "popLive": false,
+          "detail": "no PoP activity: no PoP payout in 18 keystone blocks sampled over the last 6 h (blocks 7213975…7215675); keystone 7101250 not searched on Bitcoin (no PoP miner addresses or block scan configured)"
+        },
+        "checkedAt": 1794699118
+      },
+      "batchTx": "0x4b9f8a72a9aa1368e453e4015924896a1a3f0a4974a857404ef3dffa57eb3e92",
+      "leaf": "0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26",
+      "reasons": [
+        "agent signature recovers to 0xdf30729958c325dc17e1a85a6bd7623da2410f53, expected agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 or principal 0x15d34aaf54267db7d7c367839aaf71a00a2c6a65; neither agent nor principal is a contract wallet"
+      ],
+      "problems": [
+        {
+          "check": "agentSignature",
+          "code": "signature-mismatch",
+          "message": "agent signature recovers to 0xdf30729958c325dc17e1a85a6bd7623da2410f53, expected agent 0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19 or principal 0x15d34aaf54267db7d7c367839aaf71a00a2c6a65; neither agent nor principal is a contract wallet"
+        }
+      ],
+      "checks": {
+        "file": "pass",
+        "registry": "pass",
+        "chainId": "pass",
+        "manifest": "pass",
+        "agentSignature": "fail",
+        "anchor": "pass",
+        "merkleProof": "pass",
+        "batch": "pass",
+        "onchainProof": "pass",
+        "anchorTx": "pass",
+        "status": "pass"
+      },
+      "signer": null,
+      "incomplete": false
+    },
+    "wrong-batch": {
+      "valid": false,
+      "status": null,
+      "batchTx": "0x095262769b399c82dacb1696fff29ab1ad39092e6cb49e2768fed3bd2018558a",
+      "leaf": "0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26",
+      "reasons": [
+        "proof does not verify against the anchor's root 0x6b30161318c6d924179b7e24347be2ca8c7dba8eee6fe438b78c742f76fcdffc: leaf 0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26 with this 1-element proof hashes to a different root",
+        "registry.verifyReceipt returned false: proof does not verify against batch 5's root 0x6b30161318c6d924179b7e24347be2ca8c7dba8eee6fe438b78c742f76fcdffc"
+      ],
+      "problems": [
+        {
+          "check": "merkleProof",
+          "code": "proof-local-mismatch",
+          "message": "proof does not verify against the anchor's root 0x6b30161318c6d924179b7e24347be2ca8c7dba8eee6fe438b78c742f76fcdffc: leaf 0x955b0b51060b5e2569c29663448c70ff023d2815f0fc00180f60e3939b34ad26 with this 1-element proof hashes to a different root"
+        },
+        {
+          "check": "onchainProof",
+          "code": "proof-onchain-false",
+          "message": "registry.verifyReceipt returned false: proof does not verify against batch 5's root 0x6b30161318c6d924179b7e24347be2ca8c7dba8eee6fe438b78c742f76fcdffc"
+        }
+      ],
+      "checks": {
+        "file": "pass",
+        "registry": "pass",
+        "chainId": "pass",
+        "manifest": "pass",
+        "agentSignature": "pass",
+        "anchor": "pass",
+        "merkleProof": "fail",
+        "batch": "pass",
+        "onchainProof": "fail",
+        "anchorTx": "pass",
+        "status": "skip"
+      },
+      "signer": {
+        "address": "0x4c942e2c9ce38ba8073e9d3fb5f4c2041e3a4e19",
+        "role": "agent",
+        "method": "ecdsa"
+      },
+      "incomplete": false
+    }
+  }
+}
