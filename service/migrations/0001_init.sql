@@ -55,7 +55,7 @@ CREATE TABLE batches (
 CREATE INDEX idx_batches_state ON batches (state, id);
 CREATE INDEX idx_batches_next_check ON batches (next_check_at);
 
--- One row per run id: the idempotency key (proofOfPatience's one-attestation-per-run pattern).
+-- One row per run id: the idempotency key.
 --
 -- state:
 --   unpaid          validated and signed by the agent, waiting for the x402 payment to settle;

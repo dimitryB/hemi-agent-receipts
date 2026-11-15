@@ -54,8 +54,8 @@ export const receiptTypes = {
 
 /**
  * Signed by the service for the direct path. `receiptDigest` is the agent's FULL EIP-712
- * digest (0x1901 ‖ domainSeparator ‖ structHash), not the struct hash: the same envelope
- * shape as proofOfPatience's VerifierAttestation.
+ * digest (0x1901 ‖ domainSeparator ‖ structHash), not the struct hash, so the two
+ * signatures are domain-separated.
  */
 export const serviceAttestationTypes = {
   ServiceAttestation: [
@@ -120,7 +120,7 @@ export function receiptDigest(receipt: ReceiptFields, domain: RegistryDomain): H
 /**
  * JSON for eth_signTypedData_v4 (browser wallets). Declares EIP712Domain explicitly: viem's
  * serializer only emits domain fields declared in types.EIP712Domain, and without it the
- * wallet signs `domain: {}` (the proofOfPatience fix).
+ * wallet signs `domain: {}`.
  */
 const eip712DomainTypes = [
   { name: "name", type: "string" },

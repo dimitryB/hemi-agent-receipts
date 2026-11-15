@@ -1,6 +1,6 @@
 # Runbook
 
-How to deploy ReceiptRegistry and run the attestation service on Hemi, and what to do when something goes wrong. Adapted from [proofOfPatience](https://github.com/dimitryB/proofOfPatience)'s mainnet runbook: the owner key is kept apart from the service key, the deployer key lives in an encrypted keystore, and every privileged value is read back from the explorer before go-live.
+How to deploy ReceiptRegistry and run the attestation service on Hemi, and what to do when something goes wrong. The owner key is kept apart from the service key, the deployer key lives in an encrypted keystore, and every privileged value is read back from the explorer before go-live.
 
 **Nothing goes to mainnet without an explicit go from the registry owner.** Testnet is unrestricted.
 
@@ -23,7 +23,7 @@ Never paste a private key into a terminal command, an issue, a chat or a log. On
 
 ## 2. Day one: testnet gas
 
-proofOfPatience's V1 skipped testnet because test gas could not be obtained. Check that on day one. As of 2026-10-29 it is obtainable (docs/DECISIONS.md D-9):
+Testnet gas is not always easy to obtain, so check that on day one. As of 2026-10-29 it is obtainable (docs/DECISIONS.md D-9):
 
 1. Get Sepolia ETH from any Sepolia faucet.
 2. Tunnel it to Hemi testnet in the Hemi portal: https://app.hemi.xyz/en/tunnel/?networkType=testnet

@@ -74,13 +74,13 @@ The fixture includes a non-ASCII tag (`café`), so UTF-8 handling is exercised. 
 - **Leaves are sorted before building**, so the root does not depend on arrival order, and an odd node is carried up unchanged rather than duplicated. Duplicating the last node, as some libraries do, makes two different leaf sets share a root.
 - **No second preimage risk from the leaf format.** The leaf preimage is 128 bytes and an internal node's is 64, so an internal node cannot be presented as a leaf. OpenZeppelin's `StandardMerkleTree` double-hashes leaves to get the same property for 64-byte leaves; ours does not need it. The contract also offers `verifyReceipt`, which computes the leaf itself, so on-chain callers never pass a raw leaf.
 - **A direct attestation is a batch of one.** `attest(receipt, agentSig, deadline, serviceSig)` stores a batch whose root is the leaf, with an empty proof. Verification, voiding and status then work the same way for both paths. It also emits `ReceiptAttested`, so the direct path is indexable per receipt.
-- **The service signature carries a deadline.** The brief's `attestBatch(root, count, schemaVersion, serviceSig)` gains a `uint64 deadline`, bounded to one hour ahead, the deadline window from [proofOfPatience](https://github.com/dimitryB/proofOfPatience), an earlier Hemi project. A signed batch that leaks or sits in a stuck mempool cannot be submitted much later. Re-signing the same root with a new deadline is safe, because a root can be anchored only once.
+- **The service signature carries a deadline.** The brief's `attestBatch(root, count, schemaVersion, serviceSig)` gains a `uint64 deadline`, bounded to one hour ahead. A signed batch that leaks or sits in a stuck mempool cannot be submitted much later. Re-signing the same root with a new deadline is safe, because a root can be anchored only once.
 - **What the contract cannot check.** It sees only the root, so it cannot enforce run-id uniqueness inside batches or check `count`. The service enforces run-id uniqueness in its database; `count` is the service's signed claim. On the direct path, the contract enforces run-id uniqueness itself (`DuplicateRun`).
 - **The batch's block number is stored on chain.** A verifier reads `getBatch(id).blockNumber` and then fetches the `BatchAttested` event with a one-block `eth_getLogs`. That works on every Hemi RPC we tested, including dRPC's free plan, which refuses most ranges (D-6).
 
 ## D-3. Who signs
 
-**Decision.** The agent, or its principal, signs the EIP-712 `Receipt` struct (`runId, manifestHash, agent, principal, schemaVersion`). The service countersigns a domain-separated envelope: `BatchAttestation(root, count, schemaVersion, deadline)` for batches, and `ServiceAttestation(receiptDigest, deadline)` over the agent's **full** digest for the direct path. This is proofOfPatience's `VerifierAttestation(bytes32 scoreHash)` pattern.
+**Decision.** The agent, or its principal, signs the EIP-712 `Receipt` struct (`runId, manifestHash, agent, principal, schemaVersion`). The service countersigns a domain-separated envelope: `BatchAttestation(root, count, schemaVersion, deadline)` for batches, and `ServiceAttestation(receiptDigest, deadline)` over the agent's **full** digest for the direct path.
 
 **What each signature proves.**
 
@@ -150,15 +150,15 @@ The window was first the last 6 keystone blocks (30 minutes). A review showed th
 
 | Brief | Built | Why |
 |------|------|------|
-| `attestBatch(root, count, schemaVersion, serviceSig)` | adds `uint64 deadline` | Deadline window from proofOfPatience (D-2) |
+| `attestBatch(root, count, schemaVersion, serviceSig)` | adds `uint64 deadline` | A leaked or stuck signature expires within an hour (D-2) |
 | `attest(receipt, agentSig, serviceSig)` | adds `uint64 deadline` | Same |
-| `voidBatch(batchId)` | `voidBatch(batchId, expectedRoot, reason)` | proofOfPatience's targeted void: an incident-time call fails loudly on a stale or mistyped target. The reason is emitted for the record. |
+| `voidBatch(batchId)` | `voidBatch(batchId, expectedRoot, reason)` | A targeted void: an incident-time call fails loudly on a stale or mistyped target. The reason is emitted for the record. |
 | `BatchAttested(batchId, root, count, schemaVersion)` | adds `serviceSigner` | So the event alone shows which key vouched for the batch (D-3) |
 | `ReceiptAttested(runId, agent, principal, manifestHash)` | adds `batchId`, `schemaVersion` | Indexer completeness: events carry every stored field |
 | `verifyInclusion(batchId, leaf, proof)` | kept, plus `verifyReceipt(batchId, receipt, proof)` | `verifyReceipt` derives the leaf and checks the schema version, so callers never handle raw leaves |
 | — | `setSchemaVersionEnabled` | Schema v2 can be accepted without a redeploy |
 
-Kept from proofOfPatience: `Ownable2Step`, `Pausable` (pause stops anchoring, never reads), the rotatable service key, replay rejection by id, events carrying every field. Dropped: cooldowns, score ceilings, leaderboards, blocklists, every game field.
+The contract also uses `Ownable2Step`, `Pausable` (pause stops anchoring, never reads), a rotatable service key, replay rejection by id, and events that carry every field.
 
 ## D-6. RPC endpoints and log-range limits
 
@@ -351,7 +351,7 @@ At about 0.001 gwei, deploying the registry costs roughly 0.000002 ETH and one `
 | Relayer and deployer | `0xACadCDeE87cDbf94d440fe10E10371F8865AC22d` | yes, about 0.002 | none: it pays gas for the deployment and for `attestBatch` |
 | Demo agent | `0x4C942E2C9ce38Ba8073E9D3fB5F4C2041E3A4E19` | no | signs the demo receipts |
 
-The deployer passes the owner and service signer to the constructor, so the account that pays for the deployment holds no authority over the contract. That is the same owner/service separation as proofOfPatience's runbook, with gas payment split out as well.
+The deployer passes the owner and service signer to the constructor, so the account that pays for the deployment holds no authority over the contract. The owner, the service signer and the account that pays gas are three separate keys.
 
 **Funding.** The relayer was unfunded at first (`cast balance 0xACadCDeE87cDbf94d440fe10E10371F8865AC22d` → 0). Moving testnet ETH from the facilitator project's wallets would have needed that project's keys, which this build does not use, so the owner funded the relayer by hand:
 
@@ -483,7 +483,7 @@ It ran again on 2026-11-13, exactly as written, against facilitator image `hemi-
 
 ## D-13. Receipt viewer
 
-**Decision.** One static page (`viewer/`), with no framework and no backend. esbuild bundles the SDK and viem into one ES module of about 390 KB. The page runs the SDK's own `verify()` in the browser, so the reviewer sees exactly what `receipts verify` would say. A plain-language layer (`viewer/src/present.ts`, unit-tested) puts it into words. Design cues come from proofOfPatience: one saturated hue (Hemi orange), warm neutrals, and danger shown as orange pushed hotter rather than a second hue. Every verdict also carries a glyph and words, so nothing depends on colour.
+**Decision.** One static page (`viewer/`), with no framework and no backend. esbuild bundles the SDK and viem into one ES module of about 390 KB. The page runs the SDK's own `verify()` in the browser, so the reviewer sees exactly what `receipts verify` would say. A plain-language layer (`viewer/src/present.ts`, unit-tested) puts it into words. The design uses one saturated hue (Hemi orange), warm neutrals, and danger shown as orange pushed hotter rather than a second hue. Every verdict also carries a glyph and words, so nothing depends on colour.
 
 **Why it can verify in a browser.** Every endpoint it needs allows cross-origin requests:
 

@@ -200,10 +200,10 @@ Domain: `name = "HemiAgentReceipts"`, `version = "1"`, `chainId` = the Hemi chai
 | BatchAttestation | the service | `BatchAttestation(bytes32 root,uint32 count,uint16 schemaVersion,uint64 deadline)` |
 | ServiceAttestation | the service | `ServiceAttestation(bytes32 receiptDigest,uint64 deadline)` |
 
-- `receiptDigest` in ServiceAttestation is the agent's **full** EIP-712 digest (`0x1901 ‖ domainSeparator ‖ structHash`), not the struct hash. This is proofOfPatience's VerifierAttestation pattern. It domain-separates the two signatures, so one signature can never satisfy both checks.
+- `receiptDigest` in ServiceAttestation is the agent's **full** EIP-712 digest (`0x1901 ‖ domainSeparator ‖ structHash`), not the struct hash. That domain-separates the two signatures, so one signature can never satisfy both checks.
 - The registry accepts an agent signature from `agent` or from `principal`. EOAs are checked with ECDSA. A deployed contract wallet is checked with EIP-1271 through OpenZeppelin's `SignatureChecker`.
 - `deadline` bounds how long a service signature can be submitted: it must be in the future and at most `MAX_DEADLINE_WINDOW` (1 hour) ahead of the block that includes it. The agent's signature has no deadline; replay is stopped by `runId` and root uniqueness instead.
-- Browser wallets sign with `eth_signTypedData_v4`. `serializeReceiptTypedData` declares `EIP712Domain` explicitly, because otherwise viem serializes `domain: {}` and the signature never verifies (the proofOfPatience fix).
+- Browser wallets sign with `eth_signTypedData_v4`. `serializeReceiptTypedData` declares `EIP712Domain` explicitly, because otherwise viem serializes `domain: {}` and the signature never verifies.
 
 ## 5. ReceiptRegistry interface
 
@@ -257,7 +257,7 @@ Behaviour:
 - **Who signed is not recorded.** The contract accepts the agent's or the principal's signature but stores neither the signature nor which of the two signed, and `ReceiptAttested` names both addresses without saying who signed. `agent`, in events and in `Batch`, is the named agent, not the signer: a principal can anchor a receipt that names an agent which never signed. A verifier learns the signer from the receipt file's signature (`verify` reports it as `signer.role`), never from the chain.
 - **Unknown batch ids.** `getBatch` reverts `UnknownBatch` for an id that was never issued, including 0. `verifyInclusion` and `verifyReceipt` return false instead of reverting.
 - **Owner and signer stay apart** through every path: the constructor, `setServiceSigner`, `transferOwnership`, and again when `acceptOwnership` completes, in case the signer was rotated onto the pending owner in between.
-- **Void.** `voidBatch` names the batch and the root it expects to void, and fails loudly on a mismatch (`VoidTargetMismatch`), as proofOfPatience's targeted void does. A voided batch's root stays spent. `verifyInclusion` and `verifyReceipt` return false for a voided batch.
+- **Void.** `voidBatch` names the batch and the root it expects to void, and fails loudly on a mismatch (`VoidTargetMismatch`). A voided batch's root stays spent. `verifyInclusion` and `verifyReceipt` return false for a voided batch.
 - **Pause** stops both anchoring functions. Every read keeps working.
 - **Events** carry every stored field, so an indexer can rebuild all batches from logs alone. `Batch.blockNumber` lets a verifier read the anchoring event with a one-block `eth_getLogs`, which every Hemi RPC serves.
 

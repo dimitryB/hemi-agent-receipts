@@ -1,6 +1,6 @@
-/* Receipt viewer. Tokens follow proofOfPatience's design system: one saturated hue (Hemi
- * orange), warm neutrals, danger as orange pushed hotter rather than a second hue. Every
- * verdict also carries a glyph and words, so nothing depends on colour alone. */
+/* Receipt viewer. One saturated hue (Hemi orange), warm neutrals, and danger as orange
+ * pushed hotter rather than a second hue. Every verdict also carries a glyph and words, so
+ * nothing depends on colour alone. */
 
 :root {
   --hemi-600: #b32c00;
