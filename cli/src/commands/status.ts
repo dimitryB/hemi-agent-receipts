@@ -1,15 +1,18 @@
-import { createHemiPublicClient, explorerTxUrl, getReceipt, HEMI_NETWORKS, resolveStatus, type ServiceReceipt, type StatusInfo } from "@hemi-receipts/sdk";
+import type { Address } from "viem";
+import { createHemiPublicClient, DEPLOYMENTS, explorerTxUrl, getReceipt, HEMI_NETWORKS, resolveAnchorStatus, type ServiceReceipt, type StatusInfo } from "@hemi-receipts/sdk";
 import { parse } from "../args.js";
 import { BTC_OPTIONS, BTC_USAGE, describeBtc, finalityFrom } from "../btc.js";
-import { EXIT, json, RUN_ID_RE, serviceUrl, UsageError, type Io } from "../io.js";
+import { ADDRESS_RE, EXIT, json, RUN_ID_RE, serviceUrl, UsageError, type Io } from "../io.js";
 
-export const usage = `receipts status <runId> [--service URL] [--rpc URL]... [--esplora URL]... [--pop-miner ADDR]... [--btc-scan N] [--no-btc] [--json]
+export const usage = `receipts status <runId> [--service URL] [--rpc URL]... [--registry ADDR] [--esplora URL]... [--pop-miner ADDR]... [--btc-scan N] [--no-btc] [--json]
 
 Shows where a receipt is on the finality ladder (pending, hemi-included, hemi-confirmed,
 btc-published, btc-final; or voided), its Hemi confirmations and safe head, what is known
 about Bitcoin finality, and the anchoring transaction. For an anchored receipt the stage is
-re-checked locally from the Hemi RPC (--rpc, default the network's RPCs) and Bitcoin; with
---no-btc the service's status is shown as it is.
+re-checked locally from the Hemi RPC (--rpc, default the network's RPCs) and Bitcoin: the batch
+is read from the registry you trust (--registry, default the SDK's known deployment for the
+chain; never the service's word), so a voided batch or a removed anchor shows as voided or
+pending. With --no-btc the service's status is shown as it is.
 
 ${BTC_USAGE}`;
 
@@ -67,8 +70,9 @@ export function formatStatus(r: ServiceReceipt, source: "local" | "service" = "s
 }
 
 export async function status(argv: string[], io: Io): Promise<number> {
-  const { values, positionals } = parse(argv, { service: { type: "string" }, json: { type: "boolean" }, rpc: { type: "string", multiple: true }, ...BTC_OPTIONS });
+  const { values, positionals } = parse(argv, { service: { type: "string" }, json: { type: "boolean" }, rpc: { type: "string", multiple: true }, registry: { type: "string" }, ...BTC_OPTIONS });
   if (positionals.length !== 1 || !RUN_ID_RE.test(positionals[0]!)) throw new UsageError("give one runId (0x followed by 64 hex digits)");
+  if (values.registry !== undefined && !ADDRESS_RE.test(values.registry)) throw new UsageError("--registry must be a 20-byte 0x address");
   const r = await getReceipt(serviceUrl(values.service, io), positionals[0]!, { fetch: io.fetch });
 
   let local: StatusInfo | undefined;
@@ -79,7 +83,16 @@ export async function status(argv: string[], io: Io): Promise<number> {
     else {
       try {
         const client = createHemiPublicClient({ chainId: r.chainId, rpcUrls, retryCount: 3 });
-        local = await resolveStatus({ client, blockNumber: BigInt(r.anchor.blockNumber), confirmations: r.status.hemi?.requiredConfirmations, finality });
+        // The chain decides, read from a registry the user trusts: the batch, its root, the
+        // anchoring transaction and its block, then the stage. Not the service's block height alone.
+        const trusted = (values.registry as Address | undefined) ?? DEPLOYMENTS[r.chainId]?.registry;
+        const registry = trusted ?? r.registry;
+        local = await resolveAnchorStatus({ client, registry, anchor: r.anchor, confirmations: r.status.hemi?.requiredConfirmations, finality });
+        const notes = [
+          ...(!trusted ? [`no known registry for chain ${r.chainId}: checked against the service's ${r.registry}; pass --registry to use one you trust`] : []),
+          ...(trusted && trusted.toLowerCase() !== r.registry.toLowerCase() ? [`the service reports registry ${r.registry}; checked against ${trusted}`] : []),
+        ];
+        if (notes.length) local = { ...local, notes: [...(local.notes ?? []), ...notes] };
       } catch (error) {
         io.err(`warning: could not check the stage locally (${error instanceof Error ? error.message.split("\n")[0] : String(error)}); showing the service's status`);
       }

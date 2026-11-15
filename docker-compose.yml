@@ -20,8 +20,11 @@ x-service-image: &service-image
   # yet, so a stop during a slow startup would wait out the whole grace period.
   init: true
 
+# Healthy only while /health says ok: the database answers AND the RPC does. Docker and Compose
+# never restart a container for being unhealthy (only for exiting), so an RPC outage shows up in
+# `docker ps` without restarting the service.
 x-healthcheck: &healthcheck
-  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>r.json()).then(b=>process.exit(b&&b.ok===true?0:1),()=>process.exit(1))"]
   interval: 30s
   timeout: 5s
   retries: 3

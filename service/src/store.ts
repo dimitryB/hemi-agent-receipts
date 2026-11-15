@@ -229,6 +229,18 @@ export class Store {
     return results;
   }
 
+  /**
+   * Claims a signed payment authorization for a run id. The first run id to claim it owns it for
+   * good; the answer is the owner, which is `runId` unless another run id claimed it first.
+   * Atomic: two requests racing with one authorization get the same owner.
+   */
+  async claimPayment(paymentKey: string, runId: Hex, now: number): Promise<Hex> {
+    await this.db.prepare(`INSERT OR IGNORE INTO payment_claims (payment_key, run_id, claimed_at) VALUES (?, ?, ?)`).bind(paymentKey, runId, now).run();
+    const row = await this.db.prepare(`SELECT run_id FROM payment_claims WHERE payment_key = ?`).bind(paymentKey).first<{ run_id: Hex }>();
+    if (!row) throw new Error(`payment claim ${paymentKey} vanished after it was written`);
+    return row.run_id;
+  }
+
   /** unpaid → queued (batch) or direct_signed (direct), once the payment has settled. */
   async markPaid(runId: Hex, leaf: Hex, payment: unknown, now: number): Promise<boolean> {
     const result = await this.db

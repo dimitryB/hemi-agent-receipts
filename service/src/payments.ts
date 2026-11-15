@@ -105,6 +105,26 @@ function authorizationOf(payment: { readonly payload: unknown }): Pick<PaymentRe
   };
 }
 
+/**
+ * One signed authorization, whatever receipt it is offered for: its transfer method, token, payer
+ * and nonce. A payment without all four cannot be told apart from another, so it has no key.
+ */
+export function paymentKey(p: { transferMethod?: string; asset?: string; payer?: string; nonce?: string }): string | undefined {
+  if (!p.transferMethod || !p.asset || !p.payer || !p.nonce) return undefined;
+  return `${p.transferMethod}:${p.asset}:${p.payer}:${p.nonce}`.toLowerCase();
+}
+
+/**
+ * Whether this run id owns the payment's authorization, claiming it if no run id has yet (a
+ * record from before claims existed). Undefined for a record without an authorization to key.
+ */
+export async function ownsPayment(store: Store, runId: Hex, payment: Pick<PaymentRecord, "transferMethod" | "asset" | "payer" | "nonce">, now: number): Promise<{ owns: boolean; owner: Hex } | undefined> {
+  const key = paymentKey(payment);
+  if (!key) return undefined;
+  const owner = await store.claimPayment(key, runId, now);
+  return { owns: owner.toLowerCase() === runId.toLowerCase(), owner };
+}
+
 /** What `payment_json` keeps while a row is unpaid. `settling` is written before the facilitator is asked. */
 export interface PaymentRecord {
   status?: string;
@@ -205,6 +225,15 @@ export async function settleEndedHold(deps: { chain: ChainContext; config: Confi
   if (!payer || !nonce || !asset || !transferMethod || !config.payTo) {
     log.error("x402: a hold ran out with no authorization on record; a retry may pay, and that is a second charge if the first payment landed", { runId, tx: payment.transaction });
     await release();
+    return "released";
+  }
+
+  // Its authorization may pay for another receipt (one offered for two run ids before claims
+  // existed): then the transfer that carries its nonce is that receipt's, never this one's.
+  const claim = await ownsPayment(store, runId, { transferMethod, asset, payer, nonce }, now);
+  if (claim && !claim.owns) {
+    log.error("x402: a held payment's authorization pays for another receipt; this one is released unpaid", { runId, owner: claim.owner, payer, nonce });
+    await release({ reason: "payment_claimed_by_another_receipt", owner: claim.owner });
     return "released";
   }
 
@@ -417,6 +446,19 @@ export function createPaywall(deps: { config: Config; store: Store; log: Logger;
       const ids = receiptIdsFrom(transportContext);
       try {
         if (!ids) throw new Error("could not tell which receipt it is for");
+        // One authorization pays for one receipt. The first run id to settle it claims it; offered
+        // for any other run id it is refused before the facilitator is asked, so the transfer it
+        // makes can only ever be credited to the receipt that claimed it.
+        const authorization = authorizationOf(paymentPayload);
+        const key = paymentKey({ ...authorization, asset: requirements.asset as Address });
+        if (!key) throw new Error("the payment carries no authorization nonce to claim");
+        const owner = await store.claimPayment(key, ids.runId, Date.now());
+        if (owner.toLowerCase() !== ids.runId.toLowerCase()) {
+          log.warn("x402: refused a payment authorization that already pays for another receipt", { runId: ids.runId, owner, payer: authorization.payer, nonce: authorization.nonce });
+          await store.releaseSettleLease(ids.runId, ids.leaf, Date.now()).catch(() => undefined);
+          settleDone();
+          return { abort: true, reason: "payment_reused", message: `this payment authorization already pays for run ${owner}; sign a new payment for this receipt` };
+        }
         // Where the chain stands before the money can move: the search for this payment starts here
         // if its outcome is ever unknown. Best effort, so a slow RPC does not refuse the payment.
         const settleBlock = await withTimeout(chain.client.getBlockNumber({ cacheTime: 0 }), SETTLE_BLOCK_TIMEOUT_MS).then(String, () => undefined);

@@ -258,6 +258,7 @@ function isDirectBody(body: unknown): body is DirectAttestation & { receiptUrl?:
     !!b &&
     typeof b === "object" &&
     typeof b.receipt?.runId === "string" &&
+    /^0x[0-9a-fA-F]{64}$/.test(b.receipt.runId) &&
     typeof b.to === "string" &&
     typeof b.data === "string" &&
     typeof b.serviceSignature === "string" &&

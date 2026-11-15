@@ -127,7 +127,8 @@ echo "deploy block  ${DEPLOY_BLOCK:-unknown}"
 [[ "$MODE" == live ]] && echo "explorer      $EXPLORER/address/$REGISTRY"
 
 if [[ "$MODE" == live ]]; then
-  [[ -f .env ]] && cp .env ".env.bak.$(date +%s)"
+  # The backup holds the same keys: readable by its owner only, and gitignored (.env.*).
+  [[ -f .env ]] && (umask 077 && cp .env ".env.bak.$(date +%s)" && chmod 600 .env.bak.*)
   cat > .env <<ENV
 # Written by scripts/testnet-deploy.sh on $(date -u +%Y-%m-%dT%H:%M:%SZ). Secrets: never commit.
 CHAIN_ID=743111

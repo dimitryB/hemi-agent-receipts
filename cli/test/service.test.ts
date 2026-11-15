@@ -4,11 +4,11 @@
  */
 import { test, before, after, describe } from "node:test";
 import assert from "node:assert/strict";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { createPublicClient, http, type Address, type Hex, type PublicClient } from "viem";
+import { createPublicClient, encodeFunctionData, http, type Address, type Hex, type PublicClient } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   ANVIL_KEYS,
@@ -16,6 +16,7 @@ import {
   anchorBatch,
   anchorDirect,
   deployRegistry,
+  voidBatch,
   makeManifest,
   mine,
   startAnvil,
@@ -23,7 +24,7 @@ import {
   type Anvil,
   type FakeService,
 } from "@hemi-receipts/e2e/lib";
-import { chainFor, newRunId, type ManifestV1 } from "@hemi-receipts/sdk";
+import { chainFor, newRunId, normalizeManifest, receiptFromManifest, receiptRegistryAbi, type ManifestV1, type ReceiptFields } from "@hemi-receipts/sdk";
 import { cli, REPO, tempDir } from "./helpers.js";
 
 const CHAIN_ID = 743_111;
@@ -229,6 +230,54 @@ describe("attest", () => {
     }
   });
 
+  test("--direct refuses an answer for another run, another receipt, another contract or another call; nothing is written", async () => {
+    const other = "0x00000000000000000000000000000000000000aa" as Address;
+    let answer: (sent: { manifest: ManifestV1; agentSignature: Hex }) => unknown = () => ({});
+    const stub = createServer((req, res) => {
+      const chunks: Buffer[] = [];
+      req.on("data", (c: Buffer) => chunks.push(c));
+      req.on("end", () => {
+        res.setHeader("content-type", "application/json");
+        if (req.method === "GET") return void res.end(JSON.stringify({ ok: true, chainId: CHAIN_ID, registry }));
+        res.statusCode = 202;
+        res.end(JSON.stringify(answer(JSON.parse(Buffer.concat(chunks).toString("utf8")))));
+      });
+    });
+    await new Promise<void>((resolve) => stub.listen(0, "127.0.0.1", resolve));
+    const out = tempDir();
+    try {
+      const url = `http://127.0.0.1:${(stub.address() as AddressInfo).port}`;
+      const direct = (sent: { manifest: ManifestV1; agentSignature: Hex }, over: { receipt?: ReceiptFields; to?: Address; data?: Hex } = {}) => {
+        const receipt = over.receipt ?? receiptFromManifest(normalizeManifest(sent.manifest));
+        const deadline = Math.floor(Date.now() / 1000) + 600;
+        const data = over.data ?? encodeFunctionData({ abi: receiptRegistryAbi, functionName: "attest", args: [receipt, sent.agentSignature, BigInt(deadline), "0x1234"] });
+        return { receipt, agentSignature: sent.agentSignature, deadline, serviceSignature: "0x1234", registry, chainId: CHAIN_ID, to: over.to ?? registry, data };
+      };
+      const run = async (name: string) => cli(["attest", writeManifest(`${name}.json`, makeManifest()), "--direct", "--out", out.path], { env: env({ RECEIPTS_SERVICE_URL: url }) });
+      const cases: [string, typeof answer, RegExp][] = [
+        ["traversal", (s) => ({ ...direct(s), receipt: { ...direct(s).receipt, runId: "../../escaped" } }), /unexpected response/],
+        ["other-run", (s) => direct(s, { receipt: { ...receiptFromManifest(normalizeManifest(s.manifest)), runId: newRunId() } }), /is for run 0x[0-9a-f]{64}, not 0x[0-9a-f]{64}; refusing it, nothing was written/],
+        ["other-contract", (s) => direct(s, { to: other }), new RegExp(`sends to ${other}, not the registry`, "i")],
+        ["other-call", (s) => direct(s, { data: encodeFunctionData({ abi: receiptRegistryAbi, functionName: "getBatch", args: [1n] }) }), /calls getBatch, not attest/],
+      ];
+      for (const [name, reply, expected] of cases) {
+        answer = reply;
+        const r = await run(name);
+        assert.equal(r.code, 1, `${name}: ${r.stderr}`);
+        assert.match(r.stderr, expected, name);
+      }
+      assert.deepEqual(readdirSync(out.path), [], "no attest file written for any of them");
+      assert.ok(!existsSync(join(out.path, "..", "..", "escaped.attest.json")), "nothing written outside --out");
+      answer = (s) => direct(s);
+      const ok = await run("ok");
+      assert.equal(ok.code, 0, ok.stderr);
+      assert.equal(readdirSync(out.path).length, 1, "a matching answer is written");
+    } finally {
+      stub.close();
+      out.cleanup();
+    }
+  });
+
   test("usage errors exit 2: no key, bad --wait stage, unreachable service", async () => {
     const path = writeManifest("u.json", makeManifest());
     const noKey = await cli(["attest", path], { env: { RECEIPTS_SERVICE_URL: service.url } });
@@ -268,7 +317,7 @@ describe("status and fetch", () => {
     assert.match(included.stdout, /^explorer\s+https:\/\/testnet\.explorer\.hemi\.xyz\/tx\/0x[0-9a-f]{64}$/m);
     // chain id 743111: hemi-confirmed needs the safe head too (anvil: latest − 32)
     await mine(anvil.url, 35);
-    const confirmed = await cli(["status", manifest.runId, "--service", service.url, "--rpc", anvil.url, "--json"]);
+    const confirmed = await cli(["status", manifest.runId, "--service", service.url, "--rpc", anvil.url, "--registry", registry, "--json"]);
     assert.equal(confirmed.code, 0, confirmed.stderr);
     const s = JSON.parse(confirmed.stdout);
     assert.equal(s.source, "local");
@@ -280,7 +329,7 @@ describe("status and fetch", () => {
     assert.equal(s.btc.source, "unavailable");
     assert.match(s.btc.detail, /^no PoP activity: no PoP payout in \d+ keystone blocks? sampled over the last /);
     assert.match(s.explorer, /^https:\/\/testnet\.explorer\.hemi\.xyz\/tx\//);
-    const text = await cli(["status", manifest.runId, "--service", service.url, "--rpc", anvil.url]);
+    const text = await cli(["status", manifest.runId, "--service", service.url, "--rpc", anvil.url, "--registry", registry]);
     assert.match(text.stdout, /^source\s+checked locally \(Hemi RPC \+ Bitcoin\); the service says hemi-confirmed$/m);
     assert.match(text.stdout, /^bitcoin\s+unavailable: no PoP activity: no PoP payout in \d+ keystone blocks? sampled over the last /m);
     const service_ = await cli(["status", manifest.runId, "--service", service.url, "--no-btc"]);
@@ -295,6 +344,51 @@ describe("status and fetch", () => {
     assert.equal(down.code, 0);
     assert.match(down.stderr, /warning: could not check the stage locally/);
     assert.match(down.stdout, /^source\s+receipts service$/m);
+  });
+
+  test("status reads the anchor from the chain: an anchor the chain lacks is pending, a voided batch is voided", async () => {
+    const m = makeManifest();
+    assert.equal((await cli(["attest", writeManifest("void.json", m)], { env: env() })).code, 0);
+    await service.flush();
+    await mine(anvil.url, 35);
+    const check = async (url: string) => {
+      const r = await cli(["status", m.runId, "--service", url, "--rpc", anvil.url, "--registry", registry, "--json"]);
+      assert.equal(r.code, 0, r.stderr);
+      return JSON.parse(r.stdout);
+    };
+    const before = await check(service.url);
+    assert.equal(before.stage, "hemi-confirmed");
+    assert.equal(before.source, "local");
+
+    // A service that reports another anchoring transaction: the chain's own log decides.
+    const fakeTx = `0x${"ab".repeat(32)}`;
+    let lie: (anchor: { txHash: string; batchId: number }) => void = (a) => void (a.txHash = fakeTx);
+    const liar = createServer(async (req, res) => {
+      const upstream = await fetch(`${service.url}${req.url}`);
+      const body = (await upstream.json()) as { anchor?: { txHash: string; batchId: number } } | null;
+      if (body?.anchor) lie(body.anchor);
+      res.writeHead(upstream.status, { "content-type": "application/json" }).end(JSON.stringify(body));
+    });
+    await new Promise<void>((resolve) => liar.listen(0, "127.0.0.1", resolve));
+    try {
+      const lied = await check(`http://127.0.0.1:${(liar.address() as AddressInfo).port}`);
+      assert.equal(lied.serviceStage, "hemi-confirmed");
+      assert.equal(lied.stage, "pending");
+      assert.match(lied.notes.join("\n"), new RegExp(`was anchored by tx 0x[0-9a-f]{64}, not the anchor's ${fakeTx}`));
+      lie = (a) => void (a.batchId = 9_999);
+      const missing = await check(`http://127.0.0.1:${(liar.address() as AddressInfo).port}`);
+      assert.equal(missing.stage, "pending");
+      assert.match(missing.notes.join("\n"), /has no batch 9999 \(UnknownBatch\)/);
+    } finally {
+      liar.close();
+    }
+
+    // The owner voids the batch; this service never notices, the local check does.
+    await voidBatch({ client, registry, batchId: before.anchor.batchId, root: before.anchor.root });
+    const after = await check(service.url);
+    assert.equal(after.serviceStage, "hemi-confirmed");
+    assert.equal(after.stage, "voided");
+    assert.match(after.notes.join("\n"), new RegExp(`the registry owner voided batch ${before.anchor.batchId}`));
   });
 
   test("fetch saves the receipt file, merges a matching manifest, and the file verifies", async () => {

@@ -29,6 +29,8 @@ export interface Config {
   pollIntervalMs: number;
   /** Longest the poller waits between checks of one confirmed batch. */
   pollMaxIntervalMs: number;
+  /** How often a btc-final batch is re-read for a void (getBatch only). */
+  pollFinalCheckMs: number;
   /** Batches checked per poller tick, at most. Bounds RPC use. */
   pollMaxBatchesPerTick: number;
   /** How long a service signature (batch or direct) is valid, in seconds. 10..3600; 1800 by default. */
@@ -263,6 +265,7 @@ export function loadConfig(env: Env = process.env): Config {
     hemiConfirmations: int("HEMI_CONFIRMATIONS", 10, 1, 100_000),
     pollIntervalMs,
     pollMaxIntervalMs: seconds("POLL_MAX_INTERVAL_SECONDS", 600, 0.05, 86_400),
+    pollFinalCheckMs: seconds("POLL_FINAL_CHECK_SECONDS", 3600, 0.05, 7 * 86_400),
     pollMaxBatchesPerTick: int("POLL_MAX_BATCHES_PER_TICK", 20, 1, 1000),
     signatureTtlSeconds: int("SIGNATURE_TTL_SECONDS", 1800, 10, 3600),
     stuckTxMs: seconds("STUCK_TX_SECONDS", 180, 0.05, 86_400),

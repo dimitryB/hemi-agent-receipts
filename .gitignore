@@ -1,6 +1,9 @@
 node_modules/
 dist/
 .env
+# .env backups and variants hold keys too; only the example is committed
+.env.*
+!.env.example
 *.sqlite
 *.sqlite-journal
 *.sqlite-wal

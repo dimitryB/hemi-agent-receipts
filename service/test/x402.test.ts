@@ -382,6 +382,47 @@ describe("x402 paywall (fake in-process facilitator)", () => {
     assert.equal(facilitator.calls.settle, before.settle + 1);
   });
 
+  it("one authorization pays for one run id: offered for another run id, even while the first settles, it is never settled", async () => {
+    const [a, b] = [await signed(chain, makeManifest()), await signed(chain, makeManifest())];
+    const requestA = { manifest: a.manifest, agentSignature: a.agentSignature };
+    const requestB = { manifest: b.manifest, agentSignature: b.agentSignature };
+    const payment = await paymentFor("/attest", requestA);
+    const before = { ...facilitator.calls };
+
+    // A is in its settlement phase, so the authorization is not spent anywhere yet.
+    let release!: () => void;
+    facilitator.settleHold = new Promise<void>((resolve) => (release = resolve));
+    const settling = facilitator.nextSettle();
+    const first = post(`${service.url}/attest`, requestA, payment);
+    let reused: HttpResult;
+    try {
+      await settling;
+      reused = await post(`${service.url}/attest`, requestB, payment);
+    } finally {
+      facilitator.settleHold = undefined;
+      release();
+    }
+    assert.equal(reused.status, 402, JSON.stringify(reused.body));
+    assert.equal(facilitator.calls.settle, before.settle + 1, "only A's settlement reached the facilitator");
+    const rowB = await service.store.getReceipt(b.receipt.runId);
+    assert.equal(rowB?.state, "unpaid");
+    assert.equal(rowB?.payment_json, null, "nothing on record for B: no hold for recovery to credit later");
+    assert.equal(rowB?.settle_lease_until, null);
+
+    const resA = await first;
+    assert.equal(resA.status, 202, JSON.stringify(resA.body));
+    assert.ok(["queued", "batched"].includes((await service.store.getReceipt(a.receipt.runId))!.state), "A is paid (batched once a batch fills)");
+
+    // Once A is paid the claim stays: the same authorization still cannot pay for B.
+    const again = await post(`${service.url}/attest`, requestB, payment);
+    assert.equal(again.status, 402);
+    assert.equal(facilitator.calls.settle, before.settle + 1, "still one settlement");
+    // B pays with an authorization of its own.
+    const paid = await paidPost("/attest", requestB);
+    assert.equal(paid.status, 202, JSON.stringify(paid.body));
+    assert.equal(facilitator.calls.settle, before.settle + 2);
+  });
+
   it("a refused submission is replaced at once by a corrected receipt under the same run id, without the old manifest", async () => {
     const first = await signed(chain, makeManifest());
     facilitator.settleMode = "fail";
@@ -807,6 +848,49 @@ for (const { method, asset, stubAt, env } of NONCE_CASES) {
       assert.equal(res.status, 409);
       assert.equal(res.body.error, "run_id_conflict");
       assert.equal((await service.store.getReceipt(runId))?.state, "queued");
+    });
+
+    it("used, and the same authorization was also offered for another run id: only the run id that claimed it is credited", async () => {
+      const [a, b] = [await signed(chain, makeManifest()), await signed(chain, makeManifest())];
+      const requestA = { manifest: a.manifest, agentSignature: a.agentSignature };
+      const requestB = { manifest: b.manifest, agentSignature: b.agentSignature };
+      const payment = await paymentAt(`${service.url}/attest`, requestA, client);
+      // A's settlement answer is lost (the facilitator's "already used" for a second settle looks the same).
+      facilitator.settleMode = "lost";
+      try {
+        assert.equal((await post(`${service.url}/attest`, requestA, payment)).status, 402);
+        const charged = calls();
+        const reused = await post(`${service.url}/attest`, requestB, payment);
+        assert.equal(reused.status, 402);
+        assert.equal(calls().settle, charged.settle, "never settled for B");
+      } finally {
+        facilitator.settleMode = "ok";
+      }
+      assert.equal((await service.store.getReceipt(b.receipt.runId))?.payment_json, null, "B holds nothing a recovery could credit");
+      await land();
+      await endTheHold(service.store, a.receipt.runId);
+      assert.equal((await post(`${service.url}/attest`, requestA)).status, 200, "A is credited from its transfer");
+      assert.equal((await service.store.getReceipt(a.receipt.runId))?.state, "queued");
+      assert.equal((await post(`${service.url}/attest`, requestB)).status, 402, "B was never paid for, so it pays");
+      assert.notEqual((await service.store.getReceipt(b.receipt.runId))?.state, "queued");
+    });
+
+    it("a hold that names another receipt's authorization (recorded before claims existed) is released, never credited from that transfer", async () => {
+      const a = await heldPayment("lost");
+      await land(); // A's payment reaches PAY_TO
+      const b = await heldPayment("lost"); // B holds an authorization of its own that never lands
+      const recordA = await paymentOfRow(a.runId);
+      const rowB = (await service.store.getReceipt(b.runId))!;
+      // As an older version could have recorded it: B's hold names A's authorization.
+      await service.store.notePayment(b.runId, rowB.leaf, { ...JSON.parse(rowB.payment_json!), payer: recordA.payer, nonce: recordA.nonce }, Date.now(), Date.now() + SETTLEMENT_HOLD_MS);
+      await endTheHold(service.store, b.runId);
+      await endTheHold(service.store, a.runId);
+      const resB = await post(`${service.url}/attest`, b.request);
+      assert.equal(resB.status, 402, "B is released: that transfer pays for A");
+      assert.ok(log.lines.some((line) => line.includes("pays for another receipt") && line.includes(`runId=${b.runId}`)));
+      assert.equal(JSON.parse((await service.store.getReceipt(b.runId))!.payment_json!).reason, "payment_claimed_by_another_receipt");
+      assert.equal((await post(`${service.url}/attest`, a.request)).status, 200, "A is still credited from it");
+      assert.equal((await service.store.getReceipt(a.runId))?.state, "queued");
     });
 
     it("used by the buyer's own cancel: the receipt is released, and the retry pays", async () => {

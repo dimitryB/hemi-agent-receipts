@@ -44,7 +44,8 @@ RUN mkdir -p /data && chown node:node /data
 USER node
 VOLUME ["/data"]
 EXPOSE 8787
+# Reads `ok` from /health, which stays false while the RPC is unreachable (HTTP stays 200).
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
-  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/health').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"]
+  CMD ["node", "-e", "fetch('http://127.0.0.1:'+(process.env.PORT||8787)+'/health').then(r=>r.json()).then(b=>process.exit(b&&b.ok===true?0:1),()=>process.exit(1))"]
 # node:sqlite is stable enough for us but still flagged experimental on Node 22.
 CMD ["node", "--disable-warning=ExperimentalWarning", "service/dist/index.js"]

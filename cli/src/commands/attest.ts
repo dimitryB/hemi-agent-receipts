@@ -1,6 +1,6 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { resolve, join } from "node:path";
-import type { Address, Hex } from "viem";
+import { decodeFunctionData, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import {
   ConflictError,
@@ -10,6 +10,7 @@ import {
   PaymentRequiredError,
   describePaymentRequired,
   receiptFromManifest,
+  receiptRegistryAbi,
   registryDomain,
   ServiceError,
   signReceipt,
@@ -22,6 +23,7 @@ import {
   type DirectAttestation,
   type FetchLike,
   type ManifestV1,
+  type ReceiptFields,
   type ReceiptFile,
   type ServiceReceipt,
   type Stage,
@@ -168,12 +170,13 @@ export async function attest(argv: string[], io: Io): Promise<number> {
         paying = true;
         result = await send(fetcher);
       }
+      checkAnswer(result, manifest, agentSignature, domain);
       outcome.httpStatus = result.httpStatus;
       outcome.created = result.created;
       outcome.status = result.stage;
       outcome.receiptUrl = result.receiptUrl;
       if (result.direct) {
-        outcome.attestFile = await writeAttestFile(result.direct, result.receiptUrl, resolve(io.cwd, values.out!));
+        outcome.attestFile = await writeAttestFile(result.direct, result.receiptUrl, manifest.runId, resolve(io.cwd, values.out!));
         if (!values.json) {
           io.err(`${manifest.runId}: wrote ${outcome.attestFile}; send its calldata to ${result.direct.to} before ${new Date(result.direct.deadline * 1000).toISOString()} (e.g. cast send <to> <data>)`);
         }
@@ -218,6 +221,44 @@ function timedOut(error: WaitError, runId: Hex, until: Stage, timeoutMs: number,
 
 class PaymentFailure extends Failure {}
 
+/** The service answered about something other than the receipt it was sent. Not a Failure: that would read as a payment problem and stop the rest. */
+class AnswerMismatch extends Error {}
+
+const sameReceipt = (a: ReceiptFields, b: ReceiptFields): boolean =>
+  a.runId.toLowerCase() === b.runId.toLowerCase() &&
+  a.manifestHash.toLowerCase() === b.manifestHash.toLowerCase() &&
+  a.agent.toLowerCase() === b.agent.toLowerCase() &&
+  a.principal.toLowerCase() === b.principal.toLowerCase() &&
+  Number(a.schemaVersion) === Number(b.schemaVersion);
+
+/**
+ * Refuses an answer about another run, before anything is written or shown. On the direct path
+ * the caller sends `data` to `to` with their own key, so both must be exactly `registry.attest`
+ * for this receipt and this signature, on the registry the receipt was signed for.
+ */
+function checkAnswer(result: SubmitResult, manifest: ManifestV1, agentSignature: Hex, domain: { chainId: number; verifyingContract: Address }): void {
+  const mismatch = (what: string) => new AnswerMismatch(`the service's answer ${what}; refusing it, nothing was written`);
+  if (typeof result.runId !== "string" || result.runId.toLowerCase() !== manifest.runId.toLowerCase()) throw mismatch(`is for run ${String(result.runId)}, not ${manifest.runId}`);
+  const direct = result.direct;
+  if (!direct) return;
+  const mine = receiptFromManifest(manifest);
+  if (!sameReceipt(direct.receipt, mine)) throw mismatch("carries a different receipt");
+  if (direct.to.toLowerCase() !== domain.verifyingContract.toLowerCase()) throw mismatch(`sends to ${direct.to}, not the registry ${domain.verifyingContract}`);
+  if (direct.chainId !== undefined && Number(direct.chainId) !== domain.chainId) throw mismatch(`is for chain ${direct.chainId}, not ${domain.chainId}`);
+  const call = (() => {
+    try {
+      return decodeFunctionData({ abi: receiptRegistryAbi, data: direct.data });
+    } catch {
+      throw mismatch("has calldata that is not a registry call");
+    }
+  })();
+  if (call.functionName !== "attest") throw mismatch(`calls ${call.functionName}, not attest`);
+  const [receipt, signature, deadline] = call.args as readonly [ReceiptFields, Hex, bigint, Hex];
+  if (!sameReceipt(receipt, mine)) throw mismatch("has calldata for a different receipt");
+  if (signature.toLowerCase() !== agentSignature.toLowerCase()) throw mismatch("has calldata with a different agent signature");
+  if (BigInt(direct.deadline) !== deadline) throw mismatch("has a deadline that differs from its calldata");
+}
+
 /** A 402 we cannot or did not pay, or a failure inside the x402 payment itself. */
 function paymentProblem(error: unknown, paying: boolean, runId: string): Failure | undefined {
   if (error instanceof PaymentFailure) return error;
@@ -257,10 +298,10 @@ async function writeReceiptFile(final: ServiceReceipt, manifest: ManifestV1, dir
   return path;
 }
 
-/** The direct path's countersignature and calldata, for the caller's own transaction. */
-async function writeAttestFile(direct: DirectAttestation, receiptUrl: string | undefined, dir: string): Promise<string> {
+/** The direct path's countersignature and calldata, for the caller's own transaction. Named from the local manifest, never the answer. */
+async function writeAttestFile(direct: DirectAttestation, receiptUrl: string | undefined, runId: Hex, dir: string): Promise<string> {
   await mkdir(dir, { recursive: true });
-  const path = join(dir, `${direct.receipt.runId}.attest.json`);
+  const path = join(dir, `${runId}.attest.json`);
   await writeFile(path, `${json({ ...direct, ...(receiptUrl ? { receiptUrl } : {}) })}\n`);
   return path;
 }

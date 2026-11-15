@@ -4,7 +4,7 @@ import { notCheckedYet } from "./finality.js";
 import { batchIdOfRun, findAnchorTx, readBatch, receiptOrNull, type ChainContext } from "./chain.js";
 import type { Config } from "./config.js";
 import { errorText, type Logger } from "./log.js";
-import { paymentOf, settleEndedHold } from "./payments.js";
+import { ownsPayment, paymentOf, settleEndedHold } from "./payments.js";
 import { SETTLEMENT_HOLD_MS } from "./store.js";
 import type { BatchRow, ReceiptRow, Store } from "./store.js";
 
@@ -24,7 +24,9 @@ const DIRECT_GRACE_SECONDS = 300;
  * `getBatch` (void check). RPC use grows with batches, never with receipts: a batch of 64
  * receipts costs the same as a batch of one. Young batches are checked every
  * POLL_INTERVAL_SECONDS; once confirmed, the interval grows with age up to
- * POLL_MAX_INTERVAL_SECONDS. btc-final and voided batches are no longer checked.
+ * POLL_MAX_INTERVAL_SECONDS. A btc-final anchor can no longer be reorged out, but the owner can
+ * still void its batch: those are re-read every POLL_FINAL_CHECK_SECONDS with getBatch alone, so
+ * the API reports a later void. Voided batches are no longer checked.
  */
 export class StatusPoller {
   private running = false;
@@ -92,8 +94,8 @@ export class StatusPoller {
 
     const latest = await chain.client.getBlockNumber();
     this.latest = { block: latest, at: now };
-    const safe = due.length > 0 ? await this.safeHead() : null;
-    for (const batch of due) await this.checkBatch(batch, latest, safe);
+    const safe = due.some((batch) => batch.stage !== "btc-final") ? await this.safeHead() : null;
+    for (const batch of due) await (batch.stage === "btc-final" ? this.checkFinalForVoid(batch) : this.checkBatch(batch, latest, safe));
     for (const receipt of direct) await this.checkDirect(receipt);
     for (const receipt of settlements) await this.reconcileSettlement(receipt);
   }
@@ -125,7 +127,8 @@ export class StatusPoller {
 
   private nextCheckAt(stage: ReceiptStage, minedAt: number | null, now: number): number | null {
     const { config } = this.deps;
-    if (stage === "btc-final" || stage === "voided") return null;
+    if (stage === "voided") return null;
+    if (stage === "btc-final") return now + config.pollFinalCheckMs;
     if (stage === "pending" || stage === "hemi-included") return now + config.pollIntervalMs;
     const age = now - (minedAt ?? now);
     return now + Math.min(config.pollMaxIntervalMs, Math.max(config.pollIntervalMs, Math.floor(age / 10)));
@@ -186,6 +189,31 @@ export class StatusPoller {
         batch: batch.id, from: batch.stage, to: status.stage, confirmations: status.hemi?.confirmations,
       });
     }
+  }
+
+  /**
+   * A btc-final batch: Bitcoin finality means its anchor stays, so only a void can change what
+   * the API should say. One getBatch, no block or Bitcoin reads; an RPC failure fails the tick
+   * like any other read, and the batch is due again on the next one.
+   */
+  private async checkFinalForVoid(batch: BatchRow): Promise<void> {
+    const { chain, config, store, log } = this.deps;
+    const now = Date.now();
+    const onchain = await readBatch(chain, BigInt(batch.onchain_batch_id!));
+    if (!onchain.voided) {
+      await store.rescheduleBatch(batch.id, now + config.pollFinalCheckMs, now);
+      return;
+    }
+    const last = batch.status_json ? (JSON.parse(batch.status_json) as StatusInfo) : undefined;
+    const voided: StatusInfo = {
+      stage: "voided",
+      estimated: false,
+      ...(last?.hemi ? { hemi: last.hemi } : {}),
+      checkedAt: Math.floor(now / 1000),
+      notes: ["the registry owner voided this batch after it reached btc-final; verifyReceipt returns false for it"],
+    };
+    await store.setBatchStatus(batch.id, voided, null, now);
+    log.warn("poller: btc-final batch voided on chain", { batch: batch.id, onchainBatchId: batch.onchain_batch_id });
   }
 
   /** Direct path: the caller sends `attest` itself; detect it with batchIdOfRun(runId). */
@@ -250,6 +278,13 @@ export class StatusPoller {
           isAddressEqual(log.args.to as Address, config.payTo!) &&
           log.args.value === BigInt(payment.amount ?? price),
       );
+    // A transfer pays for the receipt that claimed its authorization, never for a second one.
+    const claim = paid ? await ownsPayment(store, receipt.run_id, payment, now) : undefined;
+    if (claim && !claim.owns) {
+      await store.endHold(receipt.run_id, receipt.leaf, receipt.payment_json!, { ...payment, status: "settlement_failed", reason: "payment_claimed_by_another_receipt", owner: claim.owner, checkedAt: now }, now);
+      log.error("poller: a pending settlement's authorization pays for another receipt; this one stays unpaid", { runId: receipt.run_id, owner: claim.owner, tx: payment.transaction });
+      return;
+    }
     if (paid) {
       await store.markPaid(receipt.run_id, receipt.leaf, { ...payment, status: "settled", reconciled: true, checkedAt: now }, now);
       log.info("poller: late settlement found; receipt accepted", { runId: receipt.run_id, tx: payment.transaction });

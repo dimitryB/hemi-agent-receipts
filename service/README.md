@@ -34,7 +34,7 @@ service on `:8788` with `DEV_FREE=1`, anvil's public dev keys and a throwaway da
 needs the contract artifact, so run `npm run compile -w contracts` once first. Stop it with
 `docker compose --profile local down`.
 
-The container runs as `node` (uid 1000). Its healthcheck is `GET /health`. Compose restarts it
+The container runs as `node` (uid 1000). Its healthcheck reads `ok` from `GET /health`. Compose restarts it
 `on-failure:5`, so a refused configuration gives up after five tries instead of looping.
 
 ## HTTP API
@@ -132,8 +132,11 @@ curl -s localhost:8787/receipts/0x… | jq '{stage: .status.stage, anchor}'
   "batcher": { "lastError": null }, "poller": { "lastError": null } }
 ```
 
-The status is HTTP 200 whenever the database answers, so an RPC outage does not get the
-container restarted. `ok` is false while the RPC is unreachable.
+The status is HTTP 200 whenever the database answers, and `ok` is false while the RPC is
+unreachable. The container's healthcheck reads `ok`, so an RPC outage shows the container as
+unhealthy in `docker ps`. Docker and Compose restart a container only when it exits, never for
+being unhealthy, so the outage does not restart it. An orchestrator that does restart unhealthy
+containers (Kubernetes, Swarm) should use HTTP 200 as its liveness probe and `ok` for readiness.
 
 ## Configuration
 
@@ -154,6 +157,7 @@ never echoed. [`.env.example`](../.env.example) documents each one.
 | `BATCH_MAX_WAIT_SECONDS` | `60` | |
 | `HEMI_CONFIRMATIONS` | `10` | |
 | `POLL_INTERVAL_SECONDS` | `15` | Also `POLL_MAX_INTERVAL_SECONDS` (600) and `POLL_MAX_BATCHES_PER_TICK` (20). |
+| `POLL_FINAL_CHECK_SECONDS` | `3600` | How often a `btc-final` batch is re-read for a void (one `getBatch`). |
 | `SIGNATURE_TTL_SECONDS` | `1800` | The registry allows at most 3600. |
 | `STUCK_TX_SECONDS` | `180` | |
 | `DEV_FREE` | `0` | `1` = no payment. |
@@ -217,7 +221,10 @@ by every batch. Then, for each due batch (at most `POLL_MAX_BATCHES_PER_TICK`), 
 SDK `resolveStatus` (passing `latestBlock`, `safeBlock` and the stored `anchorBlockHash`) and
 `getBatch` (the void check). RPC use grows with batches, not receipts. Young batches are
 checked every `POLL_INTERVAL_SECONDS`. Confirmed ones are checked at `age / 10`, between that
-and `POLL_MAX_INTERVAL_SECONDS`. `btc-final` and `voided` batches are no longer checked.
+and `POLL_MAX_INTERVAL_SECONDS`. A `btc-final` anchor cannot be reorged out, but the owner can
+still void its batch, so `btc-final` batches are re-read every `POLL_FINAL_CHECK_SECONDS` with
+`getBatch` alone (no block or Bitcoin reads); a void reaches the API within that interval.
+`voided` batches are no longer checked.
 Errors back off exponentially, up to 5 min.
 
 - `pending → hemi-included → hemi-confirmed → btc-published → btc-final`. Hemi progress is
@@ -278,6 +285,13 @@ Consequences in this service:
   then on leaves what the chain needs to be asked. The head is read with a 2 s limit; without it
   the payment still settles, and a later search starts from the time instead.
   If that write fails the settlement is refused (`payment_not_recorded`, a 402): nothing has moved.
+- **One authorization pays for one receipt.** Before that record, the payment's authorization
+  (transfer method, token, payer, nonce) is claimed for the run id in `payment_claims`. The first
+  run id to settle it owns it for good: the same signed payment offered for any other run id is
+  refused before the facilitator is asked (`payment_reused`, a 402), even while the first is
+  still settling. A retry for the same run id is unaffected. Every recovery below credits a
+  transfer only to the run id that claimed its authorization, so one payment can never be
+  credited to two receipts.
 - A failure that names a transaction, such as a `settlement_pending` answer (broadcast, not yet
   mined), is recorded with its tx hash, whatever the reason given.
   Retries get `409 payment_pending` instead of a second charge. The poller checks that tx: if

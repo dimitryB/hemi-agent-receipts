@@ -4,7 +4,7 @@
 receipts from-trace <trace.jsonl> [--agent ADDR] [--principal ADDR] [--model NAME] [--run-id HEX] [-o manifest.json]
 receipts attest <manifest.json...> [--service URL] [--key-env NAME] [--chain-id N] [--registry ADDR]
                 [--direct] [--store] [--wait[=STAGE]] [--timeout SEC] [--interval SEC] [--out DIR] [--json] [--approve-permit2]
-receipts status <runId> [--service URL] [--rpc URL]... [--esplora URL]... [--pop-miner ADDR]... [--btc-scan N] [--no-btc] [--json]
+receipts status <runId> [--service URL] [--rpc URL]... [--registry ADDR] [--esplora URL]... [--pop-miner ADDR]... [--btc-scan N] [--no-btc] [--json]
 receipts fetch <runId> [--service URL] [-o FILE] [--manifest FILE]
 receipts verify <receipt.json> [--rpc URL]... [--registry ADDR] [--manifest FILE] [--confirmations N]
                 [--esplora URL]... [--pop-miner ADDR]... [--btc-scan N] [--no-btc] [--json]
@@ -46,7 +46,10 @@ receipts verify receipts/0x<runId>.receipt.json                         # chain 
 - **Bitcoin finality** (`verify`, `status`): read from Bitcoin through Esplora with the SDK's
   per-network defaults; `--esplora`, `--pop-miner` and `--btc-scan` override them, `--no-btc`
   skips it. `status` re-checks an anchored receipt's stage locally (Hemi RPC + Bitcoin) and
-  says what the service reported; with `--no-btc` it shows the service's status as is.
+  says what the service reported; with `--no-btc` it shows the service's status as is. The
+  local check reads the batch from the registry you trust (`--registry`, default the SDK's
+  known deployment for the chain) and the anchoring transaction from its own `BatchAttested`
+  log, so a voided batch shows `voided` and an anchor the chain does not have shows `pending`.
 - `from-trace` follows `docs/SCHEMA.md` §6; errors name the trace line.
 
 Tests: `npm test -w cli` (in-process runs against a fake service and anvil).

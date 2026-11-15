@@ -564,6 +564,20 @@ verify          all three VALID with the service stopped (hemi-confirmed, 18–1
 
 No private key appears in the run's files or in the files changed for the deploy: they were compared, in-process, against every key in `.secrets/`.
 
+## D-15. Fixes from an outside review
+
+An outside review on 2026-11-15 reported seven findings. Each was checked against the code; all seven held, and each now has a test.
+
+| # | Finding | Fix |
+|---|------|------|
+| 1 | One x402 authorization could pay for two receipts: offered for a second run id while the first was settling, the second settle failed with `invalid_transaction_state` (read as "may have moved"), and when its hold ran out the nonce's transfer was credited to it too | `payment_claims` (migration 0004): the first run id to settle an authorization owns it; any other run id is refused before the facilitator is asked (`payment_reused`), and both recoveries (the nonce, a named tx) credit only the owner. Rows already on record were backfilled, oldest first |
+| 2 | `scripts/testnet-deploy.sh` backed `.env` up as `.env.bak.<epoch>`, which was not gitignored and was left world-readable | `.gitignore` covers `.env.*` except `.env.example`; the backup is written owner-only |
+| 3 | `receipts attest --direct` named its file from the service's runId (`../` escaped `--out`) | The file is named from the local manifest, and the answer is refused unless its receipt, target (the registry), chain, calldata (`attest` for this receipt and signature) and deadline all match |
+| 4 | btc-final batches were never read again, so a later void never reached the API | They are re-read with `getBatch` alone every `POLL_FINAL_CHECK_SECONDS` (3600); migration 0003 schedules those already final |
+| 5 | `receipts status` checked only the block height the service reported | `resolveAnchorStatus` (SDK) reads the batch from a registry the user trusts (`--registry`, default the known deployment), its `BatchAttested` log and transaction, then the stage pinned to that block's hash |
+| 6 | The Docker healthcheck passed while the RPC was down (`/health` answers 200 with `ok:false`) | The healthcheck reads `ok`. `/health` still answers 200, since Docker and Compose never restart a container for being unhealthy, and an orchestrator that does should probe liveness by status code |
+| 7 | `GET /%` crashed `viewer/serve.mjs` (`URIError` outside the try) | A malformed URL is a 400. A directory without `index.html` crashed it the same way (headers sent before the read); it is now a 404 |
+
 ## Open questions
 
 Findings this build reports back rather than resolving alone.

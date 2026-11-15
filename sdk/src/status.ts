@@ -1,6 +1,7 @@
-import type { Hex, PublicClient } from "viem";
+import { BaseError, ContractFunctionRevertedError, type Address, type Hex, type PublicClient } from "viem";
+import { receiptRegistryAbi } from "./abi.js";
 import { HEMI_NETWORKS } from "./chains.js";
-import type { BtcFinality, StatusInfo } from "./types.js";
+import type { Anchor, BtcFinality, StatusInfo } from "./types.js";
 
 /**
  * Reads the Bitcoin stages for a Hemi block. finality.ts has the PoP-based implementation
@@ -124,4 +125,65 @@ export async function resolveStatus(input: {
     return done({ stage: "btc-published", estimated: false, hemi, btc, checkedAt });
   }
   return done({ stage: "hemi-confirmed", estimated: false, hemi, btc, checkedAt });
+}
+
+/**
+ * Status of an anchor read from the chain, not taken from whoever reported it. The batch must
+ * exist with the anchor's root and not be voided, and its BatchAttested log must come from a
+ * successful transaction that is the anchor's. The stage is then resolveStatus on the block
+ * that log is in, pinned to that block's hash, so a reorg shows as `pending`.
+ *
+ *  - voided: the registry owner voided the batch.
+ *  - pending: no such batch, or the chain disagrees with the anchor (root, transaction, block),
+ *    or the anchoring block was reorged out. `notes` says which.
+ *
+ * An RPC failure throws; a revert naming its reason (an unknown batch id) is an answer.
+ * Costs getBatch, one single-block getLogs and a transaction receipt, plus resolveStatus.
+ */
+export async function resolveAnchorStatus(input: {
+  client: PublicClient;
+  registry: Address;
+  anchor: Pick<Anchor, "batchId" | "root" | "txHash" | "blockNumber">;
+  confirmations?: number;
+  finality?: FinalityReader;
+}): Promise<StatusInfo> {
+  const { client, registry, anchor } = input;
+  const checkedAt = () => Math.floor(Date.now() / 1000);
+  const notAnchored = (note: string): StatusInfo => ({ stage: "pending", estimated: false, checkedAt: checkedAt(), notes: [note] });
+  const batchId = BigInt(anchor.batchId);
+  let batch;
+  try {
+    batch = await client.readContract({ address: registry, abi: receiptRegistryAbi, functionName: "getBatch", args: [batchId] });
+  } catch (error) {
+    const revert = error instanceof BaseError ? (error.walk((e) => e instanceof ContractFunctionRevertedError) as ContractFunctionRevertedError | null) : null;
+    const named = revert?.data?.errorName ?? revert?.reason;
+    if (named) return notAnchored(`registry ${registry} has no batch ${anchor.batchId} (${named}): the anchor is not on this chain`);
+    throw error;
+  }
+  if (batch.voided) {
+    return { stage: "voided", estimated: false, checkedAt: checkedAt(), notes: [`the registry owner voided batch ${anchor.batchId}; verifyReceipt returns false for it`] };
+  }
+  if (batch.root.toLowerCase() !== anchor.root.toLowerCase()) {
+    return notAnchored(`batch ${anchor.batchId} on chain has root ${batch.root}, not the anchor's ${anchor.root}`);
+  }
+  const logs = await client.getContractEvents({
+    address: registry,
+    abi: receiptRegistryAbi,
+    eventName: "BatchAttested",
+    args: { batchId },
+    fromBlock: batch.blockNumber,
+    toBlock: batch.blockNumber,
+    strict: true,
+  });
+  const log = logs.find((l) => l.args.batchId === batchId);
+  if (!log) return notAnchored(`no BatchAttested(${anchor.batchId}) log in block ${batch.blockNumber}, where the registry says the batch was recorded`);
+  if (log.transactionHash.toLowerCase() !== anchor.txHash.toLowerCase()) {
+    return notAnchored(`batch ${anchor.batchId} was anchored by tx ${log.transactionHash}, not the anchor's ${anchor.txHash}`);
+  }
+  if (Number(batch.blockNumber) !== anchor.blockNumber) {
+    return notAnchored(`batch ${anchor.batchId} was anchored in block ${batch.blockNumber}, not the anchor's ${anchor.blockNumber}`);
+  }
+  const tx = await client.getTransactionReceipt({ hash: log.transactionHash });
+  if (tx.status !== "success") return notAnchored(`anchoring tx ${log.transactionHash} did not succeed (status ${tx.status})`);
+  return resolveStatus({ client, blockNumber: batch.blockNumber, confirmations: input.confirmations, finality: input.finality, anchorBlockHash: log.blockHash });
 }

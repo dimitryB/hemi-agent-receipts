@@ -1,7 +1,7 @@
 import { after, before, describe, it } from "node:test";
 import assert from "node:assert/strict";
 import type { BtcFinality, FinalityReader } from "@hemi-receipts/sdk";
-import { mine } from "@hemi-receipts/e2e/lib";
+import { mine, voidBatch } from "@hemi-receipts/e2e/lib";
 import type { RunningService } from "../src/service.js";
 import type { BatchRow } from "../src/store.js";
 import { get, makeManifest, post, setupChain, signed, startTestService, tempDbPath, testEnv, waitFor, type TestChain } from "./helpers.js";
@@ -58,7 +58,7 @@ describe("Bitcoin stages: read only for confirmed batches, never after btc-final
 
     const readsAtFinal = reads.length;
     await new Promise((resolve) => setTimeout(resolve, 1500));
-    assert.equal(reads.length, readsAtFinal, "a btc-final batch is no longer checked");
+    assert.equal(reads.length, readsAtFinal, "Bitcoin is no longer read for a btc-final batch");
 
     // A later estimate-free "unavailable" answer could never move it back: it is not asked again.
     answer = { source: "unavailable" };
@@ -74,8 +74,10 @@ it("withdraws a provisional Bitcoin publication without reopening the Hemi ancho
   const db = tempDbPath();
   let service: RunningService | undefined;
   let answer: BtcFinality | Error = { source: "bitcoin", publishedAtBtcHeight: 900_000, btcConfirmations: 2 };
+  let reads = 0;
   const reader: FinalityReader = {
     async read() {
+      reads++;
       if (answer instanceof Error) throw answer;
       return answer;
     },
@@ -122,7 +124,21 @@ it("withdraws a provisional Bitcoin publication without reopening the Hemi ancho
     }
     answer = { source: "bitcoin", publishedAtBtcHeight: 900_010, btcConfirmations: 9 };
     assert.equal((await poll()).status.stage, "btc-final");
-    assert.equal((await service.store.getBatch(1))!.next_check_at, null);
+    const final: BatchRow = (await service.store.getBatch(1))!;
+    assert.ok(final.next_check_at! > Date.now() + 3_500_000, "a btc-final batch is re-read for a void about an hour later (POLL_FINAL_CHECK_SECONDS)");
+
+    // Still there: the check reads getBatch alone, never Bitcoin, and keeps btc-final.
+    const readsAtFinal = reads;
+    assert.equal((await poll()).status.stage, "btc-final");
+    assert.equal(reads, readsAtFinal, "no Bitcoin read for a btc-final batch");
+
+    // The owner voids it after btc-final: the API says so on the next check, and checks stop.
+    await voidBatch({ client: chain.client, registry: chain.registry, batchId: final.onchain_batch_id!, root: final.root });
+    const voided = await poll();
+    assert.equal(voided.status.stage, "voided");
+    assert.match(voided.status.notes.join("\n"), /voided this batch after it reached btc-final/);
+    assert.equal(reads, readsAtFinal, "still no Bitcoin read");
+    assert.equal((await service.store.getBatch(1))!.next_check_at, null, "a voided batch is no longer checked");
   } finally {
     await service?.stop();
     await chain.stop();
