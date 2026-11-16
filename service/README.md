@@ -28,11 +28,12 @@ docker compose up -d receipts            # reads .env; DB on the receipts-data v
 docker compose --profile local up receipts-local   # offline demo, see below
 ```
 
-The `local` profile runs anvil (`ghcr.io/foundry-rs/foundry:v1.3.5`) and a one-shot deployer
-(`service/dist/tools/deploy-local.js`, which refuses any chain but 31337). It also runs the
-service on `:8788` with `DEV_FREE=1`, anvil's public dev keys and a throwaway database. It
-needs the contract artifact, so run `npm run compile -w contracts` once first. Stop it with
-`docker compose --profile local down`.
+The `local` profile runs anvil (`ghcr.io/foundry-rs/foundry:v1.3.5`, on `127.0.0.1:8545`, or
+`LOCAL_RPC_PORT`) and a one-shot deployer (`service/dist/tools/deploy-local.js`, which refuses
+any chain but 31337). It also runs the service on `:8788` with `DEV_FREE=1`, anvil's public dev
+keys and a throwaway database. It needs the contract artifact, so run
+`npm run compile -w contracts` once first. Stop it with `docker compose --profile local down`.
+The README's [Quickstart](../README.md#quickstart) walks through it with the CLI.
 
 The container runs as `node` (uid 1000). Its healthcheck reads `ok` from `GET /health`. Compose restarts it
 `on-failure:5`, so a refused configuration gives up after five tries instead of looping.

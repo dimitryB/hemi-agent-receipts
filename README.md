@@ -35,17 +35,79 @@ The point is that the check needs nothing but a Hemi RPC and the contract addres
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Accounts, deployment, incidents |
 | [`docs/research/STATUS_RESOLUTION.md`](docs/research/STATUS_RESOLUTION.md) | How the Bitcoin stages are read, and why no Hemi API is used |
 
-## Set up
+## Quickstart
 
-You need Node 22.18 or later, Docker with Compose v2, Foundry (`anvil`, `cast`), `jq` and `openssl`.
+Everything runs on your machine: a local chain (anvil, in Docker), the registry, the attestation service and the CLI. It needs no keys, no funds and no Hemi network. You need Node 22.18 or later, Docker with Compose v2, and `jq` for the tamper step.
 
 ```bash
-npm ci            # run npm from the repo root: its .npmrc points at the public registry
+git clone https://github.com/dimitryB/hemi-agent-receipts && cd hemi-agent-receipts
+npm ci && npm run build                 # run npm from the repo root: its .npmrc points at the public registry
+npm run compile -w contracts            # the local deployer reads the contract artifact
+docker compose --profile local up -d --wait receipts-local
+```
+
+This starts anvil (chain 31337, on `127.0.0.1:8545`; set `LOCAL_RPC_PORT` if that port is taken), deploys the registry at `0x5FbDB2315678afecb367f032d93F642f64180aa3`, and runs the service on `http://127.0.0.1:8788` with `DEV_FREE=1`, so nothing asks for payment. The first run builds the service image. Every key involved is one of anvil's well-known dev accounts, which hold value only on a local chain. The deployer reads `contracts/artifacts` through a bind mount, so with Colima or another VM-based Docker, clone under a folder the VM shares (Colima shares your home directory by default); elsewhere the deployer reports that it cannot read the artifact.
+
+Attest the three example manifests, then check them with the service stopped:
+
+```bash
+export RECEIPTS_SERVICE_URL=http://127.0.0.1:8788
+export AGENT_PRIVATE_KEY=0x7c852118294e51e653712a81e05800f419141751be58f605c371e15141b007a6  # anvil dev account 3, the examples' agent
+node cli/dist/index.js attest examples/manifests/demo-1.json examples/manifests/demo-2.json examples/manifests/demo-3.json --wait=hemi-confirmed --out receipts/
+
+LOCAL="--rpc http://127.0.0.1:8545 --registry 0x5FbDB2315678afecb367f032d93F642f64180aa3"
+docker compose --profile local stop receipts-local       # verification needs only the chain
+for f in receipts/*.receipt.json; do node cli/dist/index.js verify "$f" $LOCAL; done   # each: valid, exit 0
+F=$(ls receipts/*.receipt.json | head -1)
+jq '.manifest.model |= .[:-1] + "X"' "$F" > tampered.json
+node cli/dist/index.js verify tampered.json $LOCAL         # one byte changed: invalid, exit 1
+docker compose --profile local down
+```
+
+The three receipts share one batch and one anchoring transaction. `attest` prints `<runId> hemi-confirmed` for each and writes `receipts/<runId>.receipt.json`; `verify` prints every check. A local chain never reaches the Bitcoin stages. The same steps against Hemi testnet are [item 2](#definition-of-done-how-to-check-each-item) below, with your own keys ([Your own testnet deployment](#your-own-testnet-deployment)).
+
+## Tests
+
+The test suites also need Foundry (`anvil`, `cast`) and `openssl`:
+
+```bash
+npm ci
 npm run build     # sdk, cli, service, viewer
 npm test          # contracts, sdk, cli, service, viewer and the end-to-end Definition-of-done test
 ```
 
-`npm test` takes about a minute and a half and needs no Hemi network: every chain test runs on a local anvil. The first contract compile downloads solc 0.8.28 once. The end-to-end test runs the real service and CLI binaries, with every chain call going through a proxy that randomly fails 20 to 30% of requests (HTTP 429/5xx, resets, stalls, JSON-RPC errors, and answers dropped after the request took effect).
+`npm test` takes a few minutes and needs no Hemi network: every chain test runs on a local anvil. The first contract compile downloads solc 0.8.28 once. The end-to-end test runs the real service and CLI binaries, with every chain call going through a proxy that randomly fails 20 to 30% of requests (HTTP 429/5xx, resets, stalls, JSON-RPC errors, and answers dropped after the request took effect).
+
+## Your own testnet deployment
+
+The scripts that deploy and run on Hemi testnet read keys from `.secrets/` (gitignored) and write the service's settings to `.env` (gitignored). Neither is in the repository: create your own keys, and keep them out of your shell history and of any commit.
+
+```bash
+mkdir -m 700 -p .secrets
+for role in owner service relayer agent; do (umask 077 && cast wallet new --json > .secrets/testnet-$role.json); done
+```
+
+Fund the relayer with about 0.002 testnet ETH ([RUNBOOK §2](docs/RUNBOOK.md#2-day-one-testnet-gas) says how); the other three need none. Then:
+
+```bash
+scripts/testnet-deploy.sh --fork   # rehearsal on an anvil fork of Hemi testnet; sends nothing live
+scripts/testnet-deploy.sh          # deploys your own registry, verifies its source, writes .env
+scripts/testnet-demo.sh            # item 2 below: three receipts, one batch, verified with the service stopped
+```
+
+Your registry is not the SDK's known deployment, so pass `--registry <your address>` (the `REGISTRY_ADDRESS` in `.env`) to `receipts verify` and `receipts status`; the demo script does. Without any keys you can still verify this project's own testnet and mainnet receipts: [item 3](#definition-of-done-how-to-check-each-item) needs only the public RPC.
+
+## Paid requests through x402facilitator
+
+With `DEV_FREE` unset, the service answers `POST /attest` with an x402 402 and settles the payment through a facilitator. [x402facilitator](https://github.com/dimitryB/x402facilitator) (Apache-2.0) is a separate project. Item 7's demo runs both on local forks of Hemi; it needs no keys and no `.env` in either project, only anvil's dev accounts on the forks:
+
+```bash
+git clone https://github.com/dimitryB/x402facilitator ../x402facilitator   # or anywhere, then export X402_FACILITATOR_DIR=<path>
+(cd ../x402facilitator && docker compose build)                            # its facilitator image; the first build takes a few minutes
+scripts/x402-fork-demo.sh                                                  # needs Foundry, jq and npm run build here
+```
+
+The forks read state from Hemi's public RPCs, so this demo needs network access. If port 8080 is taken, set `FACILITATOR_PORT`. A real deployment runs x402facilitator with its own signer keys; its README covers that.
 
 ## Definition of done: how to check each item
 
@@ -59,7 +121,7 @@ npm test          # contracts, sdk, cli, service, viewer and the end-to-end Defi
 
    The contract itself refuses an owner equal to the service signer. The deployment record is in [DECISIONS.md D-10](docs/DECISIONS.md).
 
-2. **`docker compose up` runs the service; three manifests give three receipt ids in one `BatchAttested` tx; `receipts status` shows at least `hemi-confirmed`.** It needs `.env`, which `scripts/testnet-deploy.sh` writes, and the demo agent's key in `.secrets/testnet-agent.json` (`cast wallet new --json > .secrets/testnet-agent.json`). Then:
+2. **`docker compose up` runs the service; three manifests give three receipt ids in one `BatchAttested` tx; `receipts status` shows at least `hemi-confirmed`.** It needs your own testnet deployment ([above](#your-own-testnet-deployment)): `.env` and `.secrets/testnet-agent.json`. Without keys, the [Quickstart](#quickstart) runs the same steps on a local chain. Then:
 
    ```bash
    scripts/testnet-demo.sh
@@ -98,7 +160,7 @@ npm test          # contracts, sdk, cli, service, viewer and the end-to-end Defi
 
    It shows mainnet block 5620209 as `btc-final` via keystone 5620225 in Bitcoin block 973746, block 5619605 as `btc-final` through a later keystone, and a fresh testnet block as `hemi-confirmed` with "no PoP activity". An estimate never advances a stage.
 
-7. **`POST /attest` returns 402 with valid x402 payment requirements when `DEV_FREE` is unset, and settles against [x402facilitator](https://github.com/dimitryB/x402facilitator) when it is available.** The 402 is covered by `npm test -w e2e` and `service/test/x402.test.ts`. It answers even when the facilitator is down, because the requirements come from configuration. Settlement through x402facilitator, cloned next to this repository (or at `X402_FACILITATOR_DIR`), runs entirely on local forks of Hemi:
+7. **`POST /attest` returns 402 with valid x402 payment requirements when `DEV_FREE` is unset, and settles against [x402facilitator](https://github.com/dimitryB/x402facilitator) when it is available.** The 402 is covered by `npm test -w e2e` and `service/test/x402.test.ts`. It answers even when the facilitator is down, because the requirements come from configuration. Settlement through x402facilitator runs entirely on local forks of Hemi; [Paid requests through x402facilitator](#paid-requests-through-x402facilitator) says how to get it:
 
    ```bash
    scripts/x402-fork-demo.sh

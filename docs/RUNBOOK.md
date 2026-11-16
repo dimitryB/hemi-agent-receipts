@@ -47,7 +47,7 @@ scripts/testnet-deploy.sh --fork   # rehearsal against an anvil fork of Hemi tes
 scripts/testnet-deploy.sh          # live: deploys, verifies the source on Blockscout, reads every value back
 ```
 
-The script uses the keys in `.secrets/` (see D-9 for their addresses). It writes `contracts/ignition/parameters/hemi-testnet.json`, checks it with `contracts/scripts/check-deploy-params.mjs`, deploys with Hardhat Ignition, submits the source to Blockscout's v2 verification API (Hardhat's own `--verify` gets HTTP 403 from this explorer; DECISIONS.md D-10), reads back `owner`, `serviceSigner`, `schemaVersionEnabled(1)` and `paused`, and checks `is_verified` on `testnet.explorer.hemi.xyz`. Finally it writes the service's `.env`.
+The script reads the owner, service and relayer keys from `.secrets/testnet-{owner,service,relayer}.json` (`cast wallet new --json`); the README's [Your own testnet deployment](../README.md#your-own-testnet-deployment) shows how to create them. This project's own testnet accounts are listed in D-9. It writes `contracts/ignition/parameters/hemi-testnet.json`, checks it with `contracts/scripts/check-deploy-params.mjs`, deploys with Hardhat Ignition, submits the source to Blockscout's v2 verification API (Hardhat's own `--verify` gets HTTP 403 from this explorer; DECISIONS.md D-10), reads back `owner`, `serviceSigner`, `schemaVersionEnabled(1)` and `paused`, and checks `is_verified` on `testnet.explorer.hemi.xyz`. Finally it writes the service's `.env`.
 
 If source verification fails but the deployment succeeded, do not deploy again. Verify by hand in the explorer's UI with Solidity 0.8.28, optimizer on with 200 runs, EVM `paris`, and the two constructor arguments.
 

@@ -3,8 +3,8 @@
 #   docker compose build                      build the service image
 #   docker compose up -d receipts             run against the chain configured in .env
 #   docker compose --profile local up receipts-local
-#                                             offline demo: anvil + a one-shot registry
-#                                             deployer + the service on :8788 (DEV_FREE).
+#                                             offline demo: anvil (127.0.0.1:8545) + a one-shot
+#                                             registry deployer + the service on :8788 (DEV_FREE).
 #                                             Needs `npm run compile -w contracts` once first.
 #
 # See service/README.md and .env.example.
@@ -58,6 +58,10 @@ services:
     image: ghcr.io/foundry-rs/foundry:v1.3.5
     entrypoint: ["anvil"]
     command: ["--host", "0.0.0.0", "--port", "8545", "--chain-id", "31337", "--block-time", "2"]
+    # Published on loopback so the CLI on the host can verify against it (README "Quickstart").
+    # LOCAL_RPC_PORT moves it if 8545 is taken.
+    ports:
+      - "127.0.0.1:${LOCAL_RPC_PORT:-8545}:8545"
     healthcheck:
       test: ["CMD", "cast", "chain-id", "--rpc-url", "http://127.0.0.1:8545"]
       interval: 2s
