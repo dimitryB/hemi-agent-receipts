@@ -22,9 +22,9 @@ describe("D1-shaped database adapter", () => {
   it("applies migrations once and records them in d1_migrations", async () => {
     const db = new SqliteD1(":memory:");
     try {
-      assert.deepEqual(await migrate(db), ["0001_init.sql", "0002_settle_lease.sql", "0003_final_void_check.sql", "0004_payment_claims.sql"]);
+      assert.deepEqual(await migrate(db), ["0001_init.sql", "0002_settle_lease.sql", "0003_final_void_check.sql", "0004_payment_claims.sql", "0005_canonical_payment_claims.sql"]);
       assert.deepEqual(await migrate(db), []);
-      assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM d1_migrations").first("n"), 4);
+      assert.equal(await db.prepare("SELECT COUNT(*) AS n FROM d1_migrations").first("n"), 5);
     } finally {
       db.close();
     }
@@ -56,7 +56,7 @@ describe("D1-shaped database adapter", () => {
       await receipt(4, 40, { status: "settlement_unknown" }); // no authorization on record
       await receipt(5, 50, null);
 
-      assert.deepEqual(await migrate(db), ["0003_final_void_check.sql", "0004_payment_claims.sql"]);
+      assert.deepEqual(await migrate(db), ["0003_final_void_check.sql", "0004_payment_claims.sql", "0005_canonical_payment_claims.sql"]);
       const checks = (await db.prepare("SELECT id, next_check_at FROM batches ORDER BY id").all<{ id: number; next_check_at: number | null }>()).results;
       assert.ok(checks[0]!.next_check_at! > Date.now() - 60_000, "the btc-final batch is due for a void check");
       assert.equal(checks[1]!.next_check_at, null, "a voided batch stays unchecked");
@@ -69,6 +69,35 @@ describe("D1-shaped database adapter", () => {
       const store = new Store(db);
       assert.equal(await store.claimPayment("permit2:0xasset:0xpayer:42", hex(1) as `0x${string}`, Date.now()), hex(2));
       assert.equal(await store.claimPayment("permit2:0xasset:0xpayer:44", hex(1) as `0x${string}`, Date.now()), hex(1));
+    } finally {
+      db.close();
+      rmSync(before, { recursive: true, force: true });
+    }
+  });
+
+  it("0005 rewrites claims to canonical nonces: one authorization spelled two ways keeps one claim, the earlier one", async () => {
+    const before = mkdtempSync(join(tmpdir(), "migrations-"));
+    const db = new SqliteD1(":memory:");
+    try {
+      for (const file of ["0001_init.sql", "0002_settle_lease.sql", "0003_final_void_check.sql", "0004_payment_claims.sql"]) copyFileSync(join(MIGRATIONS_DIR, file), join(before, file));
+      await migrate(db, before);
+      const asset = "0x" + "a".repeat(40);
+      const payer = "0x" + "b".repeat(40);
+      const claim = (key: string, run: string, at: number) => db.prepare("INSERT INTO payment_claims (payment_key, run_id, claimed_at) VALUES (?, ?, ?)").bind(key, run, at).run();
+      await claim(`permit2:${asset}:${payer}:0042`, "0xrun-later-spelling", 20);
+      await claim(`permit2:${asset}:${payer}:42`, "0xrun-first", 10);
+      await claim(`permit2:${asset}:${payer}:000`, "0xrun-zero", 30);
+      await claim(`permit2:${asset}:${payer}:0x2a`, "0xrun-hex", 5);
+      await claim(`eip3009:${asset}:${payer}:0x${"c".repeat(64)}`, "0xrun-3009", 40);
+      assert.deepEqual(await migrate(db), ["0005_canonical_payment_claims.sql"]);
+      const rows = (await db.prepare("SELECT payment_key, run_id FROM payment_claims ORDER BY payment_key").all<{ payment_key: string; run_id: string }>()).results;
+      assert.deepEqual(rows, [
+        { payment_key: `eip3009:${asset}:${payer}:0x${"c".repeat(64)}`, run_id: "0xrun-3009" },
+        { payment_key: `permit2:${asset}:${payer}:0`, run_id: "0xrun-zero" },
+        { payment_key: `permit2:${asset}:${payer}:0x2a`, run_id: "0xrun-hex" },
+        { payment_key: `permit2:${asset}:${payer}:42`, run_id: "0xrun-first" },
+      ]);
+      assert.ok(await db.prepare("SELECT name FROM sqlite_master WHERE type = 'index' AND name = 'idx_payment_claims_run'").first("name"));
     } finally {
       db.close();
       rmSync(before, { recursive: true, force: true });

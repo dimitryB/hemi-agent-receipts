@@ -56,12 +56,41 @@ describe("keystoneAbrev", () => {
     assert.equal(k.abrevHash, "0x7be19b906da98bba80833c1a78db736c31d9b3cbe067172c954645b058117099");
   });
 
-  test("old keystones are cached: the second read costs no RPC call", async () => {
-    const client = mainnet();
+  test("old keystones the chain reports finalized are cached: the second read costs no RPC call", async () => {
+    const client = fakeHemi({ chainId: 43_111, blocks: MAINNET_BLOCKS, latest: 5_620_740, finalized: 5_620_700 });
     const cache: AbrevCache = new Map();
     const a = await keystoneAbrev(client, 5_620_225, { cache });
     const before = client.calls.length;
     assert.deepEqual(await keystoneAbrev(client, 5_620_225, { cache }), a);
+    assert.equal(client.calls.length, before);
+  });
+
+  test("a cached keystone is re-checked until it is finalized: a reorg that changes its hash drops it", async () => {
+    const blocks = structuredClone(MAINNET_BLOCKS);
+    const options: { chainId: number; blocks: typeof blocks; latest: number; finalized?: number } = { chainId: 43_111, blocks, latest: 5_620_740 };
+    const client = fakeHemi(options);
+    const cache: AbrevCache = new Map();
+    const a = await keystoneAbrev(client, 5_620_225, { cache });
+
+    // Old, but not finalized: each read checks the block's hash (one header read), and the hash still matches.
+    let before = client.calls.length;
+    assert.deepEqual(await keystoneAbrev(client, 5_620_225, { cache }), a);
+    const checks = client.calls.slice(before).filter((call) => call !== "eth_getBlockByNumber finalized");
+    assert.deepEqual(checks, ["eth_getBlockByNumber 0x55c201"], "one header read of 5620225, and 5620200 is not read again");
+
+    // A reorg replaces block 5620225: the cached abrev is dropped, and the new block's is read.
+    const reorged = `0x${"ab".repeat(32)}` as Hex;
+    blocks["5620225"] = { ...blocks["5620225"]!, hash: reorged };
+    const b = await keystoneAbrev(client, 5_620_225, { cache });
+    assert.equal(b.blockHash, reorged);
+    assert.notEqual(b.abrev, a.abrev, "the abrev commits to the block hash, so a publication of the old one no longer matches");
+    assert.equal(cache.get("43111:5620225")?.blockHash, reorged);
+
+    // Once the chain reports it finalized, it is no longer read at all.
+    options.finalized = 5_620_700;
+    await keystoneAbrev(client, 5_620_225, { cache });
+    before = client.calls.length;
+    assert.deepEqual(await keystoneAbrev(client, 5_620_225, { cache }), b);
     assert.equal(client.calls.length, before);
   });
 

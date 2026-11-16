@@ -1,7 +1,7 @@
 import express, { type ErrorRequestHandler, type Express, type NextFunction, type Request, type RequestHandler, type Response } from "express";
 import { encodeFunctionData, type Address, type Hex } from "viem";
 import { receiptDigest, receiptRegistryAbi, serviceAttestationTypedData, type ReceiptFields } from "@hemi-receipts/sdk";
-import { withTimeout, type ChainContext, type RegistryGate } from "./chain.js";
+import { signedByServiceKey, withTimeout, type ChainContext, type RegistryGate } from "./chain.js";
 import type { Config } from "./config.js";
 import { HttpError, parseAttestBody, verifyAgentSignature, type AttestInput, type CodeCache, type Limiter } from "./input.js";
 import { errorText, type Logger } from "./log.js";
@@ -148,11 +148,17 @@ export function createApp(deps: AppDeps): Express {
           res.status(200).json(await receiptResponse(row));
           return;
         }
-        if (row.state !== "anchored" && (row.direct_deadline ?? 0) < Math.floor(now / 1000) + DIRECT_REFRESH_MARGIN_SECONDS) {
+        const expiring = (row.direct_deadline ?? 0) < Math.floor(now / 1000) + DIRECT_REFRESH_MARGIN_SECONDS;
+        // A signature made by a key that is no longer the service's (the signer was rotated) would revert.
+        const staleKey =
+          !expiring &&
+          row.direct_service_signature !== null &&
+          !(await signedByServiceKey(chain, serviceAttestationTypedData(receiptDigest(fieldsOf(row), chain.domain), BigInt(row.direct_deadline!), chain.domain), row.direct_service_signature as Hex));
+        if (row.state !== "anchored" && (expiring || staleKey)) {
           const { signature, deadline } = await signDirect(fieldsOf(row));
           await store.setDirectSignature(runId, signature, deadline, now);
           row = (await store.getReceipt(runId))!;
-          log.info("direct: re-issued an expired service signature (no charge)", { runId });
+          log.info(staleKey ? "direct: re-issued a service signature made by a rotated-out key (no charge)" : "direct: re-issued an expired service signature (no charge)", { runId });
         }
         res.status(200).json({ ...directBody(row, req), status: (await receiptResponse(row)).status });
         return;

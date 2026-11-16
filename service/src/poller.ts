@@ -280,6 +280,11 @@ export class StatusPoller {
       );
     // A transfer pays for the receipt that claimed its authorization, never for a second one.
     const claim = paid ? await ownsPayment(store, receipt.run_id, payment, now) : undefined;
+    if (claim && claim.owner === null) {
+      await store.touchReceipt(receipt.run_id, now);
+      log.error("poller: a pending settlement's nonce is not one its contract would accept, so its transfer cannot be tied to this receipt; still holding it", { runId: receipt.run_id, tx: payment.transaction, nonce: payment.nonce });
+      return;
+    }
     if (claim && !claim.owns) {
       await store.endHold(receipt.run_id, receipt.leaf, receipt.payment_json!, { ...payment, status: "settlement_failed", reason: "payment_claimed_by_another_receipt", owner: claim.owner, checkedAt: now }, now);
       log.error("poller: a pending settlement's authorization pays for another receipt; this one stays unpaid", { runId: receipt.run_id, owner: claim.owner, tx: payment.transaction });

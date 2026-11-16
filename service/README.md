@@ -315,10 +315,13 @@ Consequences in this service:
       was paid. The row becomes `settlement_abandoned` with `cancelTx`, and a retry pays. A
       cancel decides even next to a transfer, since Permit2 lets a paid nonce be cancelled
       afterwards.
-    - A `Transfer(from, PAY_TO, ≥ amount)` on the asset in a transaction whose input carries the
-      nonce: the payment landed. The row is recorded as settled with `via: "transfer"` and
-      `transferTx`, and queued, and the retry gets the free replay. A transfer to `PAY_TO` that
-      carries another nonce is a payment for something else, and does not count.
+    - A `Transfer(from, PAY_TO, amount)` on the asset in a transaction whose call is the
+      settlement of exactly this authorization (decoded: `transferWithAuthorization` on the
+      token, or the x402 Permit2 proxy's `settle` / `settleWithPermit`, with token, payer,
+      recipient, amount and nonce matching): the payment landed. The row is recorded as settled
+      with `via: "transfer"` and `transferTx`, and queued, and the retry gets the free replay. A
+      transfer to `PAY_TO` that settled another nonce is a payment for something else, and does
+      not count.
     - Neither: the hold stays, and the log says `neither a transfer to PAY_TO carrying it nor a
       cancel was found` with the payer, nonce and block range. So does a range over 50,000
       blocks.
@@ -404,11 +407,12 @@ TEST_LOG_LEVEL=info npm test -w service
 - **A hold that the logs cannot decide stays.** A used nonce with neither a cancel nor a
   transfer carrying it in the logs keeps its receipt held, and every retry reads again. The RPC
   missing logs is the expected cause, and the next read decides. A facilitator that moved the
-  money in a transaction without the nonce in its input would never be decided; the facilitator
-  this service is built for calls the token's `transferWithAuthorization` or the x402 Permit2
-  proxy's `settle`, both with the nonce in the call (DECISIONS.md D-12, RUNBOOK §6).
-- A receipt anchored and later voided is reported `voided` only if the void happens before
-  the batch reaches `btc-final`; final batches are not re-checked.
+  money through a call this service does not decode (a multicall, a wrapper) would never be
+  decided; the facilitator this service is built for calls the token's
+  `transferWithAuthorization` or the x402 Permit2 proxy's `settle` directly (DECISIONS.md D-12,
+  D-16, RUNBOOK §6).
+- A void after `btc-final` reaches the API within `POLL_FINAL_CHECK_SECONDS` (an hour by
+  default), when the batch is next re-read (D-15); `receipts verify` sees it at once.
 - Whether an account has code is cached for ten minutes, and an ECDSA match is accepted without
   the lookup while the signature-check rate limit is spent or the RPC does not answer. In those
   windows an EIP-7702-delegated agent's own signature can pass here and fail on chain, on the

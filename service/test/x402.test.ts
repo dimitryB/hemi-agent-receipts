@@ -47,6 +47,14 @@ async function endTheHold(store: Store, runId: Hex, options: { authorizationLive
   await store.notePayment(runId, row.leaf, { ...payment, deadline, at: now - SETTLEMENT_HOLD_MS - 1 }, now, now - 1);
 }
 
+/** The same signed payment with its payload edited: what a buyer replaying one authorization could send. */
+function rewritePayment(headers: Record<string, string>, edit: (payment: { payload: Record<string, any> }) => void): Record<string, string> {
+  const [name, value] = Object.entries(headers)[0]!;
+  const decoded = JSON.parse(Buffer.from(value, "base64").toString("utf8"));
+  edit(decoded);
+  return { [name]: Buffer.from(JSON.stringify(decoded), "utf8").toString("base64") };
+}
+
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 const ENTRY = fileURLToPath(new URL("../src/index.ts", import.meta.url));
@@ -421,6 +429,32 @@ describe("x402 paywall (fake in-process facilitator)", () => {
     const paid = await paidPost("/attest", requestB);
     assert.equal(paid.status, 202, JSON.stringify(paid.body));
     assert.equal(facilitator.calls.settle, before.settle + 2);
+  });
+
+  it("one authorization however it is spelled: a nonce with a leading zero, or a second payload field, is not a new payment", async () => {
+    const [a, b, c] = [await signed(chain, makeManifest()), await signed(chain, makeManifest()), await signed(chain, makeManifest())];
+    const requestA = { manifest: a.manifest, agentSignature: a.agentSignature };
+    const requestB = { manifest: b.manifest, agentSignature: b.agentSignature };
+    const requestC = { manifest: c.manifest, agentSignature: c.agentSignature };
+    const payment = await paymentFor("/attest", requestA);
+    const before = { ...facilitator.calls };
+    assert.equal((await post(`${service.url}/attest`, requestA, payment)).status, 202);
+
+    // Permit2 reads "0" + nonce as the same number, so this is still A's authorization.
+    const padded = rewritePayment(payment, (p) => void (p.payload.permit2Authorization.nonce = `0${p.payload.permit2Authorization.nonce}`));
+    const reused = await post(`${service.url}/attest`, requestB, padded);
+    assert.equal(reused.status, 402, JSON.stringify(reused.body));
+    assert.equal(facilitator.calls.settle, before.settle + 1, "the zero-padded copy is never settled");
+    assert.equal((await service.store.getReceipt(b.receipt.runId))?.payment_json, null);
+
+    // Both payload fields: which nonce gets spent would be the facilitator's choice, so it is refused.
+    const both = rewritePayment(await paymentFor("/attest", requestC), (p) => {
+      p.payload.authorization = { from: buyer.address, to: payTo, value: "1000", validAfter: "0", validBefore: "9999999999", nonce: `0x${"77".repeat(32)}` };
+    });
+    const ambiguous = await post(`${service.url}/attest`, requestC, both);
+    assert.equal(ambiguous.status, 402, JSON.stringify(ambiguous.body));
+    assert.equal(facilitator.calls.settle, before.settle + 1, "nor is the two-field payload");
+    assert.equal((await service.store.getReceipt(c.receipt.runId))?.payment_json, null);
   });
 
   it("a refused submission is replaced at once by a corrected receipt under the same run id, without the old manifest", async () => {
@@ -891,6 +925,26 @@ for (const { method, asset, stubAt, env } of NONCE_CASES) {
       assert.equal(JSON.parse((await service.store.getReceipt(b.runId))!.payment_json!).reason, "payment_claimed_by_another_receipt");
       assert.equal((await post(`${service.url}/attest`, a.request)).status, 200, "A is still credited from it");
       assert.equal((await service.store.getReceipt(a.runId))?.state, "queued");
+    });
+
+    it("used, and the buyer paid PAY_TO the price in a settlement of another nonce, whose amount spells this nonce: not credited", async () => {
+      const body = await signed(chain, makeManifest());
+      const request = { manifest: body.manifest, agentSignature: body.agentSignature };
+      // This nonce is the price itself (1000), so its 32 bytes appear in any settlement of 1000.
+      const nonce = method === "permit2" ? "1000" : numberToHex(1000n, { size: 32 });
+      const payment = rewritePayment(await paymentAt(`${service.url}/attest`, request, client), (p) => {
+        (p.payload.permit2Authorization ?? p.payload.authorization).nonce = nonce;
+      });
+      facilitator.settleMode = "lost";
+      try {
+        assert.equal((await post(`${service.url}/attest`, request, payment)).status, 402);
+      } finally {
+        facilitator.settleMode = "ok";
+      }
+      await land("other-transfer"); // this nonce spent silently; PAY_TO paid 1000 in a settlement of nonce 1001
+      await endTheHold(service.store, body.receipt.runId);
+      assert.equal((await post(`${service.url}/attest`, request)).status, 409, "held: that transfer settled another authorization");
+      assert.equal((await paymentOfRow(body.receipt.runId)).status, "settlement_unknown");
     });
 
     it("used by the buyer's own cancel: the receipt is released, and the retry pays", async () => {

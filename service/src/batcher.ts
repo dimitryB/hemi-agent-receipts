@@ -8,6 +8,7 @@ import {
   readBatch,
   receiptOrNull,
   revertOf,
+  signedByServiceKey,
   suggestFees,
   type ChainContext,
   type Fees,
@@ -218,7 +219,9 @@ export class Batcher {
       deadline === null ||
       signature === null ||
       deadline < chainNow + margin ||
-      deadline > Number(block.timestamp) + MAX_DEADLINE_WINDOW_SECONDS - 60
+      deadline > Number(block.timestamp) + MAX_DEADLINE_WINDOW_SECONDS - 60 ||
+      // Made by a key that is no longer the service's (the signer was rotated): the registry refuses it.
+      !(await signedByServiceKey(chain, batchAttestationTypedData({ root: batch.root, count: batch.count, schemaVersion: batch.schema_version, deadline: BigInt(deadline) }, chain.domain), signature))
     ) {
       ({ deadline, signature } = await this.resign(batch, chainNow));
     }
@@ -241,6 +244,12 @@ export class Batcher {
       }
       if (revert?.name === "ExpiredSignature" || revert?.name === "DeadlineTooDistant") {
         await this.resign(batch, Number(block.timestamp));
+      }
+      if (revert?.name === "InvalidServiceSignature") {
+        // Signed by this service's key just now, so the registry's signer is another key: rotated
+        // while this process runs. Nothing this key signs will anchor; say so plainly.
+        const onchain = await client.readContract({ address: chain.registry, abi: receiptRegistryAbi, functionName: "serviceSigner" }).catch(() => undefined);
+        log.error("batcher: the registry refuses this service's signature; restart with the registry's serviceSigner key", { batch: batch.id, registrySigner: onchain, serviceKey: chain.service.address });
       }
       if (revert) throw new Error(`attestBatch would revert with ${revert.name}(${revert.args.map(String).join(", ")})`);
       throw error;

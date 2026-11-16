@@ -95,7 +95,7 @@ scripts/testnet-deploy.sh          # deploys your own registry, verifies its sou
 scripts/testnet-demo.sh            # item 2 below: three receipts, one batch, verified with the service stopped
 ```
 
-Your registry is not the SDK's known deployment, so pass `--registry <your address>` (the `REGISTRY_ADDRESS` in `.env`) to `receipts verify` and `receipts status`; the demo script does. Without any keys you can still verify this project's own testnet and mainnet receipts: [item 3](#definition-of-done-how-to-check-each-item) needs only the public RPC.
+The script keeps your deployment apart from this project's committed one: its Ignition deployment id is `receipts-hemi-testnet-<your owner's first 8 hex digits>` (or `DEPLOYMENT_ID`), with its own parameters file, both gitignored. Your registry is not the SDK's known deployment, so pass `--registry <your address>` (the `REGISTRY_ADDRESS` in `.env`) to `receipts verify` and `receipts status`; the demo script does. Without any keys you can still verify this project's own testnet and mainnet receipts: [item 3](#definition-of-done-how-to-check-each-item) needs only the public RPC.
 
 ## Paid requests through x402facilitator
 

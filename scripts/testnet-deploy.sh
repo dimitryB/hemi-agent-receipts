@@ -8,6 +8,12 @@
 # Keys come from .secrets/testnet-{owner,service,relayer}.json (cast wallet new --json).
 # The relayer pays for the deployment; owner and service signer are constructor arguments,
 # so the paying account holds no authority over the contract.
+#
+# The committed deployment (Ignition id receipts-hemi-testnet, parameters hemi-testnet.json) is
+# this project's own record, and is used only with its own owner and service signer. Any other
+# keys get a deployment of their own: id ${DEPLOYMENT_ID:-receipts-hemi-testnet-<owner's first
+# 8 hex digits>} and parameters/<id>.json (both gitignored), so Ignition never takes it for a
+# change to the committed one.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -15,7 +21,6 @@ MODE=live
 [[ "${1:-}" == "--fork" ]] && MODE=fork
 LIVE_RPC="${HEMI_TESTNET_RPC_URL:-https://testnet.rpc.hemi.network/rpc}"
 EXPLORER=https://testnet.explorer.hemi.xyz
-PARAMS=contracts/ignition/parameters/hemi-testnet.json
 MIN_BALANCE_WEI=500000000000000   # 0.0005 ETH
 
 field() { jq -r ".data | if type==\"array\" then .[0].$2 else .$2 end" ".secrets/$1.json"; }
@@ -28,11 +33,24 @@ RELAYER=$(field testnet-relayer address)
 RELAYER_KEY=$(field testnet-relayer private_key)
 SERVICE_KEY=$(field testnet-service private_key)
 
+lower() { echo "$1" | tr 'A-F' 'a-f'; }
+OFFICIAL=contracts/ignition/parameters/hemi-testnet.json
+if [[ "$(lower "$OWNER")" == "$(lower "$(jq -r .ReceiptRegistryModule.owner "$OFFICIAL")")" &&
+      "$(lower "$SERVICE")" == "$(lower "$(jq -r .ReceiptRegistryModule.serviceSigner "$OFFICIAL")")" ]]; then
+  LIVE_ID=receipts-hemi-testnet
+else
+  LIVE_ID=${DEPLOYMENT_ID:-receipts-hemi-testnet-$(lower "${OWNER:2:8}")}
+  if [[ "$LIVE_ID" == receipts-hemi-testnet ]]; then
+    echo "deployment id receipts-hemi-testnet is the committed deployment, with another owner and service signer; pick another DEPLOYMENT_ID" >&2
+    exit 2
+  fi
+fi
+
 if [[ "$MODE" == fork ]]; then
   PORT=8546
   anvil --fork-url "$LIVE_RPC" --chain-id 743111 --port $PORT --silent &
   ANVIL_PID=$!
-  trap 'kill $ANVIL_PID 2>/dev/null || true; rm -rf contracts/ignition/deployments/receipts-hemi-testnet-fork' EXIT
+  trap 'kill $ANVIL_PID 2>/dev/null || true; rm -rf contracts/ignition/deployments/receipts-hemi-testnet-fork contracts/ignition/parameters/receipts-hemi-testnet-fork.json' EXIT
   RPC="http://127.0.0.1:$PORT"
   for _ in $(seq 1 60); do cast chain-id --rpc-url "$RPC" >/dev/null 2>&1 && break; sleep 1; done
   cast rpc anvil_setBalance "$RELAYER" 0xDE0B6B3A7640000 --rpc-url "$RPC" >/dev/null   # 1 ETH on the fork only
@@ -40,11 +58,16 @@ if [[ "$MODE" == fork ]]; then
   VERIFY=()
 else
   RPC="$LIVE_RPC"
-  DEPLOYMENT_ID=receipts-hemi-testnet
+  DEPLOYMENT_ID=$LIVE_ID
   VERIFY=()   # Hardhat's Blockscout verifier gets HTTP 403 from this explorer (DECISIONS.md D-10); verified below via the v2 API
 fi
 
+# The committed deployment keeps its committed parameters file; every other one writes its own.
+PARAMS_NAME=$([[ "$DEPLOYMENT_ID" == receipts-hemi-testnet ]] && echo hemi-testnet.json || echo "$DEPLOYMENT_ID.json")
+PARAMS=contracts/ignition/parameters/$PARAMS_NAME
+
 echo "mode      $MODE"
+echo "ignition  deployment $DEPLOYMENT_ID, parameters $PARAMS"
 echo "rpc       $RPC (chain $(cast chain-id --rpc-url "$RPC"))"
 echo "owner     $OWNER"
 echo "service   $SERVICE"
@@ -73,7 +96,7 @@ node contracts/scripts/check-deploy-params.mjs "$PARAMS"
   cd contracts
   HARDHAT_IGNITION_CONFIRM_DEPLOYMENT=yes HEMI_TESTNET_RPC_URL="$RPC" HEMI_TESTNET_DEPLOYER_PRIVATE_KEY="$RELAYER_KEY" \
     npx hardhat ignition deploy --network hemiTestnet --build-profile production \
-    --parameters "ignition/parameters/hemi-testnet.json" --deployment-id "$DEPLOYMENT_ID" \
+    --parameters "ignition/parameters/$PARAMS_NAME" --deployment-id "$DEPLOYMENT_ID" \
     ${VERIFY[@]+"${VERIFY[@]}"} ignition/modules/ReceiptRegistry.ts
 )
 

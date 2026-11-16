@@ -15,6 +15,9 @@ contracts/types/
 contracts/coverage/
 contracts/ignition/deployments/chain-31337/
 contracts/ignition/parameters/hemi-mainnet.json
+# Testnet deployments other than the committed one (scripts/testnet-deploy.sh)
+contracts/ignition/deployments/receipts-hemi-testnet-*/
+contracts/ignition/parameters/receipts-hemi-testnet-*.json
 .DS_Store
 *.log
 .npm-install.lock/

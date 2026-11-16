@@ -1,4 +1,5 @@
 import { concat, numberToHex, sha256, toHex, type Hex, type PublicClient } from "viem";
+import { HEMI_NETWORKS } from "./chains.js";
 
 /**
  * Hemi keystones and their Bitcoin PoP encoding (docs/research/STATUS_RESOLUTION.md §2–§3).
@@ -91,11 +92,32 @@ export function serializeAbrev(k: {
   return out.toLowerCase() as Hex;
 }
 
-/** Where keystoneAbrev keeps abrevs of old (no longer reorgable) keystones. */
-export type AbrevCache = Map<string, KeystoneAbrev>;
+/**
+ * Where keystoneAbrev keeps abrevs of old keystones. Age alone does not make a block canonical,
+ * so an entry is checked against the block's current hash on every read until the chain reports
+ * the block `finalized` (the OP-stack tag: derived from finalized Ethereum data, so no reorg can
+ * remove it). A hash that changed (a reorg) drops the entry, and the abrev is read again.
+ */
+export type AbrevCache = Map<string, KeystoneAbrev & { finalized?: boolean }>;
 
 /** Abrevs of keystone blocks older than this are cached: OP-stack `finalized` lags ~15–28 min. */
 const CACHE_AFTER_SECONDS = 3_600;
+
+/**
+ * Whether the chain reports block `k` finalized. Only Hemi networks' `finalized` tag means it; a
+ * local chain's is synthetic, so there an entry is always re-checked. A failed read says no.
+ */
+async function finalizedAt(client: PublicClient, k: bigint): Promise<boolean> {
+  if (!HEMI_NETWORKS[client.chain?.id ?? -1]) return false;
+  try {
+    const finalized = await client.request({ method: "eth_getBlockByNumber", params: ["finalized", false] });
+    return finalized?.number != null && BigInt(finalized.number) >= k;
+  } catch {
+    return false;
+  }
+}
+
+const withoutFlag = ({ finalized: _finalized, ...abrev }: KeystoneAbrev & { finalized?: boolean }): KeystoneAbrev => abrev;
 
 /**
  * The canonical abbreviated keystone for L2 block K (a multiple of 25), from two Hemi RPC calls:
@@ -109,7 +131,16 @@ export async function keystoneAbrev(client: PublicClient, keystone: bigint | num
   if (k > 0xffffffffn) throw new KeystoneError(`keystone ${k} does not fit the abrev's 4 bytes`);
   const key = `${client.chain?.id ?? "?"}:${k}`;
   const cached = options.cache?.get(key);
-  if (cached) return cached;
+  if (cached?.finalized) return withoutFlag(cached);
+  if (cached) {
+    // One header read: K's hash commits to its whole ancestry, K − 25 included.
+    const header = await client.request({ method: "eth_getBlockByNumber", params: [numberToHex(k), false] });
+    if (header?.hash && header.hash.toLowerCase() === cached.blockHash) {
+      if (await finalizedAt(client, k)) cached.finalized = true;
+      return withoutFlag(cached);
+    }
+    options.cache!.delete(key); // reorged: read it again below
+  }
 
   const [block, prev] = await Promise.all([
     client.request({ method: "eth_getBlockByNumber", params: [numberToHex(k), true] }),
@@ -132,7 +163,9 @@ export async function keystoneAbrev(client: PublicClient, keystone: bigint | num
     blockHash: block.hash!,
   });
   const result: KeystoneAbrev = { abrev, abrevHash: abrevHash(abrev), l1, l2: Number(k), timestamp: Number(BigInt(block.timestamp)), blockHash: block.hash!.toLowerCase() as Hex };
-  if (options.cache && Date.now() / 1000 - result.timestamp > CACHE_AFTER_SECONDS) options.cache.set(key, result);
+  if (options.cache && Date.now() / 1000 - result.timestamp > CACHE_AFTER_SECONDS) {
+    options.cache.set(key, { ...result, finalized: await finalizedAt(client, k) });
+  }
   return result;
 }
 

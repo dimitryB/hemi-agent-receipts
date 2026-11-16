@@ -1,20 +1,23 @@
 import {
   BaseError,
   ContractFunctionRevertedError,
+  decodeFunctionData,
   getAbiItem,
   hexToBigInt,
   isAddressEqual,
   numberToHex,
   parseAbi,
   parseEventLogs,
+  recoverTypedDataAddress,
   type Address,
   type Hex,
   type PrivateKeyAccount,
   type PublicClient,
+  type RecoverTypedDataAddressParameters,
   type TransactionReceipt,
 } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { PERMIT2_ADDRESS } from "@x402/evm";
+import { PERMIT2_ADDRESS, x402ExactPermit2ProxyABI, x402ExactPermit2ProxyAddress } from "@x402/evm";
 import { createHemiPublicClient, EIP712_DOMAIN_NAME, EIP712_DOMAIN_VERSION, receiptRegistryAbi, registryDomain, type RegistryDomain } from "@hemi-receipts/sdk";
 import type { Config, PaymentAsset } from "./config.js";
 import { errorText, type Logger } from "./log.js";
@@ -216,6 +219,20 @@ export async function batchIdOfRun(ctx: ChainContext, runId: Hex): Promise<bigin
   return ctx.client.readContract({ address: ctx.registry, abi: receiptRegistryAbi, functionName: "batchIdOfRun", args: [runId] });
 }
 
+/**
+ * Whether the service key in use made this signature over `typedData`. False after the signer
+ * was rotated (the stored signature is the old key's, and the registry now refuses it), and for
+ * a signature that does not recover.
+ */
+export async function signedByServiceKey(ctx: Pick<ChainContext, "service">, typedData: Omit<RecoverTypedDataAddressParameters, "signature">, signature: Hex): Promise<boolean> {
+  try {
+    const signer = await recoverTypedDataAddress({ ...typedData, signature } as RecoverTypedDataAddressParameters);
+    return isAddressEqual(signer, ctx.service.address);
+  } catch {
+    return false;
+  }
+}
+
 const authorizationStateAbi = parseAbi(["function authorizationState(address authorizer, bytes32 nonce) view returns (bool)"]);
 const nonceBitmapAbi = parseAbi(["function nonceBitmap(address owner, uint256 wordPos) view returns (uint256)"]);
 
@@ -263,12 +280,13 @@ export type NonceSpend =
  * never cancels, and Permit2 lets a nonce be "cancelled" after it paid, so a cancel is how a buyer
  * would dress one payment up as two.
  *
- * Otherwise a spend is a `Transfer(payer, payTo, ≥ amount)` on the asset whose transaction carries
- * the nonce in its input. The nonce is 32 random bytes, so only the transaction that used this
- * authorization contains it, however the facilitator wraps the call.
+ * Otherwise a spend is a `Transfer(payer, payTo, amount)` on the asset in a transaction whose call
+ * is the settlement of exactly this authorization: decoded (settledAuthorization), its token,
+ * payer, recipient, amount and nonce all match. The nonce is buyer-chosen, so finding its bytes
+ * somewhere in a transaction's input proves nothing: they could be an amount or any other word.
  *
- * Neither is "unknown": logs the RPC did not return, or a spend this service cannot read. Throws
- * when a read fails.
+ * Neither is "unknown": logs the RPC did not return, a settlement wrapped in a call this service
+ * does not decode, or a spend it cannot read. Unknown keeps the hold. Throws when a read fails.
  */
 export async function nonceSpend(
   ctx: ChainContext,
@@ -293,16 +311,68 @@ export async function nonceSpend(
     if (cancel) return { by: "cancel", transaction: cancel.transactionHash!, block: cancel.blockNumber! };
   }
 
-  const needle = nonceWord.slice(2).toLowerCase();
   for (const chunk of chunks) {
     const transfers = await ctx.client.getLogs({ address: payment.asset, event: transferEvent, args: { from: payment.payer, to: payment.payTo }, ...chunk });
     for (const log of transfers) {
-      if (!log.transactionHash || log.blockNumber === null || (log.args.value ?? 0n) < payment.amount) continue;
+      if (!log.transactionHash || log.blockNumber === null || log.args.value !== payment.amount) continue;
       const tx = await ctx.client.getTransaction({ hash: log.transactionHash });
-      if (tx.input.toLowerCase().includes(needle)) return { by: "transfer", transaction: log.transactionHash, block: log.blockNumber };
+      const settled = settledAuthorization(payment.transferMethod, tx);
+      if (
+        settled &&
+        isAddressEqual(settled.token, payment.asset) &&
+        isAddressEqual(settled.payer, payment.payer) &&
+        isAddressEqual(settled.payTo, payment.payTo) &&
+        settled.amount === payment.amount &&
+        settled.nonce === nonce
+      ) {
+        return { by: "transfer", transaction: log.transactionHash, block: log.blockNumber };
+      }
     }
   }
   return { by: "unknown" };
+}
+
+const eip3009Abi = parseAbi([
+  "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, uint8 v, bytes32 r, bytes32 s)",
+  "function transferWithAuthorization(address from, address to, uint256 value, uint256 validAfter, uint256 validBefore, bytes32 nonce, bytes signature)",
+]);
+
+/** What a settlement transaction's call executed: one authorization, as the contract that ran it reads it. */
+export interface SettledAuthorization {
+  token: Address;
+  payer: Address;
+  payTo: Address;
+  amount: bigint;
+  nonce: bigint;
+}
+
+/**
+ * Decodes the settlement a transaction's call made, for the calls an x402 exact facilitator
+ * sends: EIP-3009 `transferWithAuthorization` (either signature form) sent to the token itself,
+ * and the x402 exact Permit2 proxy's `settle` / `settleWithPermit` sent to that proxy. Anything
+ * else (another target, a wrapper such as a multicall, an unknown selector) is undefined: this
+ * service cannot tell which authorization it executed.
+ */
+export function settledAuthorization(transferMethod: PaymentAsset["transferMethod"], tx: { to: Address | null; input: Hex }): SettledAuthorization | undefined {
+  if (!tx.to) return undefined;
+  try {
+    if (transferMethod === "eip3009") {
+      const call = decodeFunctionData({ abi: eip3009Abi, data: tx.input });
+      const [from, to, value, , , nonce] = call.args;
+      return { token: tx.to, payer: from, payTo: to, amount: value, nonce: hexToBigInt(nonce) };
+    }
+    if (!isAddressEqual(tx.to, x402ExactPermit2ProxyAddress)) return undefined;
+    const call = decodeFunctionData({ abi: x402ExactPermit2ProxyABI, data: tx.input });
+    if (call.functionName !== "settle" && call.functionName !== "settleWithPermit") return undefined;
+    const [permit, owner, witness] = (call.functionName === "settle" ? call.args : call.args.slice(1)) as unknown as readonly [
+      { permitted: { token: Address; amount: bigint }; nonce: bigint },
+      Address,
+      { to: Address },
+    ];
+    return { token: permit.permitted.token, payer: owner, payTo: witness.to, amount: permit.permitted.amount, nonce: permit.nonce };
+  } catch {
+    return undefined;
+  }
 }
 
 const batchAttestedEvent = getAbiItem({ abi: receiptRegistryAbi, name: "BatchAttested" });

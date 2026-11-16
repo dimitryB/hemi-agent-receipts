@@ -1,5 +1,5 @@
 import type { NextFunction, Request, RequestHandler, Response } from "express";
-import type { Address, Hex } from "viem";
+import { isAddress, type Address, type Hex } from "viem";
 import { HTTPFacilitatorClient, type FacilitatorClient, type HTTPTransportContext, type RoutesConfig } from "@x402/core/server";
 import {
   SettleError,
@@ -89,38 +89,72 @@ export function settlementRefused(error: unknown): boolean {
   return reason !== "settlement_pending" && reason !== "invalid_transaction_state" && !reason.startsWith("unexpected_");
 }
 
-/** Who is paying, and with which authorization: what an operator looks for on chain, and what decides a hold. */
-function authorizationOf(payment: { readonly payload: unknown }): Pick<PaymentRecord, "payer" | "nonce" | "transferMethod" | "deadline"> {
-  const p = payment.payload as {
+/**
+ * Who is paying, and with which authorization: what an operator looks for on chain, and what
+ * decides a hold. Read from the payload field of the transfer method this service asks for,
+ * which is the one the facilitator settles. A payload carrying the other method's field as
+ * well is `ambiguous`: which nonce would be spent depends on the facilitator, so settling it
+ * is refused.
+ */
+function authorizationOf(payment: { readonly payload: unknown }, transferMethod: PaymentAsset["transferMethod"] | undefined): Pick<PaymentRecord, "payer" | "nonce" | "transferMethod" | "deadline"> & { ambiguous?: true } {
+  const p = (payment.payload ?? {}) as {
     authorization?: { from?: Address; nonce?: string; validBefore?: string };
     permit2Authorization?: { from?: Address; nonce?: string; deadline?: string };
   };
-  const signed = p.authorization ?? p.permit2Authorization;
-  const deadline = p.authorization?.validBefore ?? p.permit2Authorization?.deadline;
+  const method = transferMethod ?? (p.authorization ? "eip3009" : "permit2");
+  const signed = method === "eip3009" ? p.authorization : p.permit2Authorization;
+  const deadline = method === "eip3009" ? p.authorization?.validBefore : p.permit2Authorization?.deadline;
   return {
-    ...(signed?.from ? { payer: signed.from } : {}),
-    ...(signed?.nonce ? { nonce: signed.nonce } : {}),
-    ...(signed ? { transferMethod: p.authorization ? "eip3009" : "permit2" } : {}),
-    ...(deadline ? { deadline } : {}),
+    ...(typeof signed?.from === "string" ? { payer: signed.from } : {}),
+    ...(typeof signed?.nonce === "string" ? { nonce: signed.nonce } : {}),
+    ...(signed ? { transferMethod: method } : {}),
+    ...(typeof deadline === "string" ? { deadline } : {}),
+    ...(p.authorization && p.permit2Authorization ? { ambiguous: true as const } : {}),
   };
 }
 
+/** The record's part of an authorization: without the `ambiguous` flag, which only decides refusal. */
+function authorizationRecord({ ambiguous: _ambiguous, ...record }: ReturnType<typeof authorizationOf>): Pick<PaymentRecord, "payer" | "nonce" | "transferMethod" | "deadline"> {
+  return record;
+}
+
+const UINT256_MAX = (1n << 256n) - 1n;
+
 /**
- * One signed authorization, whatever receipt it is offered for: its transfer method, token, payer
- * and nonce. A payment without all four cannot be told apart from another, so it has no key.
+ * A nonce as the contract that checks it reads it, so that every spelling of one authorization
+ * gives one key. EIP-3009 nonces are bytes32: exactly 32 bytes of hex, any case (a shorter
+ * value's padding depends on the encoder, so it is not accepted). Permit2 nonces are uint256:
+ * "42", "042" and "0x2a" are the same nonce, written "42". Undefined for anything else.
+ */
+export function canonicalNonce(transferMethod: string | undefined, nonce: string | undefined): string | undefined {
+  if (typeof nonce !== "string") return undefined;
+  if (transferMethod === "eip3009") return /^0x[0-9a-fA-F]{64}$/.test(nonce) ? nonce.toLowerCase() : undefined;
+  if (transferMethod !== "permit2" || !/^(0x[0-9a-fA-F]{1,64}|[0-9]{1,80})$/.test(nonce)) return undefined;
+  const value = BigInt(nonce);
+  return value <= UINT256_MAX ? value.toString(10) : undefined;
+}
+
+/**
+ * One signed authorization, whatever receipt it is offered for and however its fields are
+ * spelled: transfer method, token, payer and canonical nonce. A payment without all four, or
+ * with a nonce no contract would accept, cannot be told apart from another, so it has no key.
  */
 export function paymentKey(p: { transferMethod?: string; asset?: string; payer?: string; nonce?: string }): string | undefined {
-  if (!p.transferMethod || !p.asset || !p.payer || !p.nonce) return undefined;
-  return `${p.transferMethod}:${p.asset}:${p.payer}:${p.nonce}`.toLowerCase();
+  const nonce = canonicalNonce(p.transferMethod, p.nonce);
+  if (!nonce || !p.asset || !p.payer || !isAddress(p.asset, { strict: false }) || !isAddress(p.payer, { strict: false })) return undefined;
+  return `${p.transferMethod}:${p.asset.toLowerCase()}:${p.payer.toLowerCase()}:${nonce}`;
 }
 
 /**
  * Whether this run id owns the payment's authorization, claiming it if no run id has yet (a
- * record from before claims existed). Undefined for a record without an authorization to key.
+ * record from before claims existed). Undefined for a record with no authorization at all.
+ * `owner: null` is a record whose authorization cannot be keyed (a nonce no contract accepts):
+ * nothing can tie a transfer to it, so it is never credited.
  */
-export async function ownsPayment(store: Store, runId: Hex, payment: Pick<PaymentRecord, "transferMethod" | "asset" | "payer" | "nonce">, now: number): Promise<{ owns: boolean; owner: Hex } | undefined> {
+export async function ownsPayment(store: Store, runId: Hex, payment: Pick<PaymentRecord, "transferMethod" | "asset" | "payer" | "nonce">, now: number): Promise<{ owns: boolean; owner: Hex | null } | undefined> {
+  if (payment.nonce === undefined && payment.payer === undefined) return undefined;
   const key = paymentKey(payment);
-  if (!key) return undefined;
+  if (!key) return { owns: false, owner: null };
   const owner = await store.claimPayment(key, runId, now);
   return { owns: owner.toLowerCase() === runId.toLowerCase(), owner };
 }
@@ -207,9 +241,9 @@ async function scanRange(chain: ChainContext, payment: PaymentRecord): Promise<{
  *
  * Its nonce used: that alone does not show money moved, because a payer can spend its own nonce
  * with a cancel. So the logs decide (nonceSpend). The payer's cancel releases the row and a retry
- * pays. A `Transfer` to PAY_TO in the transaction that carries the nonce marks it paid, `via:
- * "transfer"`. Neither found keeps the hold and logs an error with the payer and nonce: the RPC
- * may have missed logs, and a later read decides.
+ * pays. A `Transfer` to PAY_TO in a transaction whose decoded call settled exactly this
+ * authorization marks it paid, `via: "transfer"`. Neither found keeps the hold and logs an error
+ * with the payer and nonce: the RPC may have missed logs, and a later read decides.
  *
  * A failed or slow read says nothing, and keeps the hold. A row without an authorization on
  * record has no nonce to read. Settling writes one first, so this is a row from an older version:
@@ -229,8 +263,12 @@ export async function settleEndedHold(deps: { chain: ChainContext; config: Confi
   }
 
   // Its authorization may pay for another receipt (one offered for two run ids before claims
-  // existed): then the transfer that carries its nonce is that receipt's, never this one's.
+  // existed): then the transfer that settled it is that receipt's, never this one's.
   const claim = await ownsPayment(store, runId, { transferMethod, asset, payer, nonce }, now);
+  if (claim && claim.owner === null) {
+    log.error("x402: a held payment's nonce is not one its contract would accept, so no transfer can be tied to it; still holding the receipt", { runId, payer, nonce });
+    return "held";
+  }
   if (claim && !claim.owns) {
     log.error("x402: a held payment's authorization pays for another receipt; this one is released unpaid", { runId, owner: claim.owner, payer, nonce });
     await release({ reason: "payment_claimed_by_another_receipt", owner: claim.owner });
@@ -449,9 +487,14 @@ export function createPaywall(deps: { config: Config; store: Store; log: Logger;
         // One authorization pays for one receipt. The first run id to settle it claims it; offered
         // for any other run id it is refused before the facilitator is asked, so the transfer it
         // makes can only ever be credited to the receipt that claimed it.
-        const authorization = authorizationOf(paymentPayload);
-        const key = paymentKey({ ...authorization, asset: requirements.asset as Address });
-        if (!key) throw new Error("the payment carries no authorization nonce to claim");
+        const authorization = authorizationOf(paymentPayload, config.paymentAsset?.transferMethod);
+        const key = authorization.ambiguous ? undefined : paymentKey({ ...authorization, asset: requirements.asset as Address });
+        if (!key) {
+          log.warn("x402: refused a payment whose authorization cannot be keyed", { runId: ids.runId, payer: authorization.payer, nonce: authorization.nonce, ambiguous: authorization.ambiguous ?? false });
+          await store.releaseSettleLease(ids.runId, ids.leaf, Date.now()).catch(() => undefined);
+          settleDone();
+          return { abort: true, reason: "invalid_payment_authorization", message: "the payment's authorization has no valid payer and nonce for this service's transfer method; nothing was charged" };
+        }
         const owner = await store.claimPayment(key, ids.runId, Date.now());
         if (owner.toLowerCase() !== ids.runId.toLowerCase()) {
           log.warn("x402: refused a payment authorization that already pays for another receipt", { runId: ids.runId, owner, payer: authorization.payer, nonce: authorization.nonce });
@@ -466,7 +509,7 @@ export function createPaywall(deps: { config: Config; store: Store; log: Logger;
         const started = { ...(settleBlock ? { settleBlock } : {}), settleStartedAt: now };
         settleStarts.set(paymentPayload, started);
         // From here on the money may move, and a kill leaves only what is on disk.
-        await store.notePayment(ids.runId, ids.leaf, { status: "settling", ...authorizationOf(paymentPayload), amount: requirements.amount, asset: requirements.asset, ...started, at: now }, now, now + SETTLEMENT_HOLD_MS);
+        await store.notePayment(ids.runId, ids.leaf, { status: "settling", ...authorizationRecord(authorization), amount: requirements.amount, asset: requirements.asset, ...started, at: now }, now, now + SETTLEMENT_HOLD_MS);
         return undefined;
       } catch (error) {
         // Nothing has moved yet, so refusing costs the buyer one retry. Settling without a record could cost a second charge.
@@ -520,7 +563,7 @@ export function createPaywall(deps: { config: Config; store: Store; log: Logger;
         log.warn("x402: settlement failed; the receipt stays unpaid", { runId: ids?.runId, reason, tx, error: errorText(error) });
         if (!ids) return;
         const now = Date.now();
-        const facts = { network: settleError?.network, ...authorizationOf(paymentPayload), amount: requirements.amount, asset: requirements.asset, ...settleStarts.get(paymentPayload), reason, at: now };
+        const facts = { network: settleError?.network, ...authorizationRecord(authorizationOf(paymentPayload, config.paymentAsset?.transferMethod)), amount: requirements.amount, asset: requirements.asset, ...settleStarts.get(paymentPayload), reason, at: now };
         // A failure that names a transaction can be answered by the chain, whatever it says: keep
         // the tx so the poller can reconcile it, and hold the row so a retry is not charged twice
         // meanwhile. A tx that reverted is released on the poller's next look.

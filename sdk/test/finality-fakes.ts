@@ -31,8 +31,12 @@ export interface RpcBlock {
   [key: string]: unknown;
 }
 
-/** A PublicClient answering eth_getBlockByNumber / eth_blockNumber / eth_chainId from fixture blocks. */
-export function fakeHemi(options: { chainId: number; blocks: Record<string, RpcBlock>; latest: number }): PublicClient & { calls: string[] } {
+/**
+ * A PublicClient answering eth_getBlockByNumber / eth_blockNumber / eth_chainId from fixture
+ * blocks, read at call time (a test may swap a block to stand for a reorg). The `finalized` tag
+ * answers `options.finalized`; without it the tag is refused, as by an RPC that lacks it.
+ */
+export function fakeHemi(options: { chainId: number; blocks: Record<string, RpcBlock>; latest: number; finalized?: number }): PublicClient & { calls: string[] } {
   const calls: string[] = [];
   const client = createPublicClient({
     chain: chainFor(options.chainId, ["http://fixture.invalid"]),
@@ -42,6 +46,10 @@ export function fakeHemi(options: { chainId: number; blocks: Record<string, RpcB
         calls.push(`${method}${params?.length ? ` ${String(params[0])}` : ""}`);
         if (method === "eth_chainId") return `0x${options.chainId.toString(16)}`;
         if (method === "eth_blockNumber") return `0x${options.latest.toString(16)}`;
+        if (method === "eth_getBlockByNumber" && params![0] === "finalized") {
+          if (options.finalized === undefined) throw new Error("fake Hemi RPC: no finalized block");
+          return { number: `0x${options.finalized.toString(16)}`, hash: `0x${options.finalized.toString(16).padStart(64, "0")}` };
+        }
         if (method === "eth_getBlockByNumber") {
           const n = Number(BigInt(params![0] as string));
           const block = options.blocks[String(n)];
