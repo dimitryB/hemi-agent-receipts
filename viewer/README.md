@@ -2,6 +2,8 @@
 
 One static page that answers, for a reviewer who is not an engineer: is this record of an AI agent's run real, and how settled is it? It loads a receipt file, verifies it in the browser with the SDK's `verify()`, and shows the run beside its verdict, its progress toward Bitcoin finality, every check in plain words, and the Merkle proof step by step.
 
+**Hosted:** https://dimitryb.github.io/hemi-agent-receipts/. On every push to `main` that touches the viewer or the SDK, [`.github/workflows/pages.yml`](../.github/workflows/pages.yml) builds both, runs the viewer tests and publishes `viewer/dist` to GitHub Pages. It is the same page as below; it holds no keys and never contacts the receipts service. All its paths are relative, so it works from a subfolder.
+
 ```bash
 npm run build -w sdk && npm run build -w viewer   # bundles the SDK and viem into viewer/dist/app.js
 npm run serve -w viewer                            # http://127.0.0.1:5180

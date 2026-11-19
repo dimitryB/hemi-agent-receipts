@@ -6,6 +6,8 @@ Turns an AI agent run into a signed manifest, anchors its hash on Hemi in Merkle
 - **The service** countersigns, batches receipts into a Merkle tree and anchors the root on Hemi.
 - **Anyone** verifies a receipt file against the chain, with no need for the service, and sees how far it has travelled: `pending → hemi-included → hemi-confirmed → btc-published → btc-final`.
 
+**Try it:** the [receipt viewer](https://dimitryb.github.io/hemi-agent-receipts/) opens on a real Hemi mainnet receipt and checks it in your browser against Hemi. Pick another example ([tampered](https://dimitryb.github.io/hemi-agent-receipts/#tampered), [forged](https://dimitryb.github.io/hemi-agent-receipts/#forged), [wrong batch](https://dimitryb.github.io/hemi-agent-receipts/#wrong-batch)) to see what a failed check looks like, or drop in a `.receipt.json` of your own.
+
 ## What it is for
 
 An AI agent that acts for someone, calls tools and spends money leaves no record that a third party can trust: logs can be edited after the fact, and the agent's operator is the one holding them. This project gives a run a receipt. When the run ends, its trace (tool calls, spend, the model used) is normalized into a manifest and signed by the agent's own key, or by the person it acted for. The signed receipt goes to a small attestation service, which gathers receipts into batches, computes a Merkle root and anchors it on Hemi in one transaction; a caller who prefers to pay its own gas can have the service countersign one receipt and send the transaction itself. The `ReceiptRegistry` contract records each batch with its root and the service's signature, and the owner key can void a bad batch, pause the contract or rotate the signer. The service charges per attestation through x402 in USDC.e, so agents pay as they go with no accounts or API keys.
@@ -176,11 +178,13 @@ The forks read state from Hemi's public RPCs, so this demo needs network access.
 
 A single page for a reviewer who is not an engineer. It shows the run (who, when, which tools, what it spent) beside a plain verdict, the finality ladder, every check in words, and the Merkle proof step by step. It verifies in the browser against Hemi directly; the receipts service is never asked whether a receipt is real.
 
+It is hosted at **https://dimitryb.github.io/hemi-agent-receipts/**, published from `main` by [`.github/workflows/pages.yml`](.github/workflows/pages.yml). To run it yourself:
+
 ```bash
-npm run build && npm run serve -w viewer    # then open http://127.0.0.1:5180/?sample=genuine
+npm run build && npm run serve -w viewer    # then open http://127.0.0.1:5180/
 ```
 
-The examples are real testnet receipts, a genuine one and its tampered copies. Details are in [viewer/README.md](viewer/README.md) and [DECISIONS.md D-13](docs/DECISIONS.md).
+The examples are real receipts: one from the mainnet smoke test, and from the testnet run a signed and anchored receipt, the same receipt without its run details, and three tampered copies. The testnet receipt lists a payment whose transaction never existed, so since D-17 it shows as genuine but with a false payment. Details are in [viewer/README.md](viewer/README.md) and [DECISIONS.md D-13](docs/DECISIONS.md).
 
 ## How it works
 
