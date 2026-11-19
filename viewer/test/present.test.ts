@@ -9,6 +9,7 @@ import {
   verify,
   VERIFY_CHECKS,
   type ReceiptFile,
+  type SpendCheck,
   type StatusInfo,
   type VerifyProblem,
   type VerifyResult,
@@ -32,6 +33,7 @@ import {
   short,
   showProgress,
   spendLabel,
+  spendStatus,
   usesOfficialTrust,
   utc,
   verdictOf,
@@ -58,7 +60,7 @@ const offline = (name: string): Promise<VerifyResult> => offlineVerify(raw(name)
 const allPass = Object.fromEntries(VERIFY_CHECKS.map((c) => [c, "pass"])) as VerifyResult["checks"];
 
 function result(over: Partial<VerifyResult> = {}): VerifyResult {
-  return { valid: true, status: null, batchTx: null, leaf: null, reasons: [], problems: [], checks: allPass, signer: null, incomplete: false, ...over };
+  return { valid: true, authentic: true, spend: [], status: null, batchTx: null, leaf: null, reasons: [], problems: [], checks: allPass, signer: null, incomplete: false, ...over };
 }
 
 const confirmedTestnet: StatusInfo = {
@@ -179,6 +181,37 @@ describe("verdict", () => {
   test("every check has a plain title", () => {
     for (const c of VERIFY_CHECKS) assert.ok(CHECK_TEXT[c].title.length > 10, c);
   });
+
+  test("a genuine receipt whose payment the chain contradicts says both: signed and recorded, but the payment is false", () => {
+    const missing: VerifyProblem = { check: "spend", code: "spend-tx-missing", message: "x" };
+    const v = verdictOf(file, result({ valid: false, authentic: true, problems: [missing], signer: { address: file.receipt.agent, role: "agent", method: "ecdsa" } }));
+    assert.equal(v.tone, "bad");
+    assert.equal(v.title, "Genuine receipt, but a payment it lists is false");
+    assert.match(v.summary, /signed by the agent, recorded on Hemi testnet and has not been changed since/);
+    assert.match(v.summary, /never happened: the transaction it names does not exist/);
+    // A receipt that fails on its own counts as not checking out, whatever its payments say.
+    const forged = verdictOf(file, result({ valid: false, authentic: false, problems: [{ check: "agentSignature", code: "signature-mismatch", message: "x" }, missing] }));
+    assert.equal(forged.title, "This receipt does not check out");
+    // A payment not mined yet decides nothing.
+    const pending = verdictOf(file, result({ valid: false, authentic: true, incomplete: true, problems: [{ check: "spend", code: "spend-tx-pending", message: "x" }] }));
+    assert.equal(pending.tone, "unknown");
+  });
+
+  test("each payment line says what the network found, in words", () => {
+    const base = { index: 0, asset: "eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443", amount: "1000", txHash: `0x${"ab".repeat(32)}` as Hex, detail: "" };
+    const status = (over: Partial<SpendCheck>) => spendStatus({ ...base, outcome: "unchecked", ...over }, file);
+    assert.deepEqual(status({ outcome: "confirmed", payer: file.receipt.agent }), { tone: "good", text: "Paid by the agent, confirmed on Hemi testnet" });
+    assert.deepEqual(status({ outcome: "confirmed", payer: file.receipt.principal }), { tone: "good", text: "Paid by the person it acted for, confirmed on Hemi testnet" });
+    assert.match(status({ outcome: "unattributed", payer: "0x000000000000000000000000000000000000beef" }).text, /by another account \(0x0000…beef\), so not shown to be this run's/);
+    assert.deepEqual(status({ outcome: "contradicted", detail: "there is no transaction 0x… on chain 743111" }), { tone: "bad", text: "No such transaction on Hemi testnet" });
+    assert.equal(status({ outcome: "contradicted", detail: "transaction 0x… reverted, so it moved nothing" }).text, "The transaction failed");
+    assert.equal(status({ outcome: "contradicted", detail: "transaction 0x… moved no 1000 of token 0x…" }).text, "The transaction moved a different amount or asset");
+    assert.equal(status({ outcome: "undetermined", detail: "transaction 0x… is not mined yet" }).text, "Not gone through yet");
+    assert.equal(status({ txHash: null }).text, "No transaction named, so not checked");
+    assert.equal(status({ asset: "usd" }).text, "Not an asset on a network, so not checked");
+    assert.equal(status({ asset: "eip155:43111/erc20:0xad11a8beb98bbf61dbb1aa0f6d6f2ecd87b35afa" }).text, "On another network, so not checked here");
+    assert.deepEqual(spendStatus(undefined, file), { tone: "unknown", text: "Not checked" });
+  });
 });
 
 describe("when the page cannot reach the network", () => {
@@ -227,7 +260,11 @@ describe("when the page cannot reach the network", () => {
       }
     }
     assert.equal(recorded.results.mainnet!.valid, true);
-    assert.equal(recorded.results.genuine!.valid, true);
+    assert.equal(recorded.results.private!.valid, true);
+    // The testnet example is signed and anchored, but lists a payment whose transaction never existed (D-17).
+    assert.equal(recorded.results.genuine!.valid, false);
+    assert.equal(recorded.results.genuine!.authentic, true);
+    assert.deepEqual(recorded.results.genuine!.problems.map((p) => p.code), ["spend-tx-missing"]);
     assert.equal(recorded.results.tampered!.valid, false);
   });
 });

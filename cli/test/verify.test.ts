@@ -31,6 +31,9 @@ before(async () => {
     serviceSigner: privateKeyToAccount(ANVIL_KEYS[ROLE.service]!).address,
   }));
   const items = await Promise.all([1, 2, 3].map(() => signManifest({ manifest: makeManifest(), chainId: CHAIN_ID, registry })));
+  // The fourth says it paid with a transaction that does not exist.
+  const madeUp = { asset: `eip155:${CHAIN_ID}/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443`, amount: "1000", txHash: `0x${"5a".repeat(32)}` as const };
+  items.push(await signManifest({ manifest: makeManifest({ spend: [madeUp] }), chainId: CHAIN_ID, registry }));
   files = (await anchorBatch({ client, registry, serviceKey: ANVIL_KEYS[ROLE.service]!, items })).files;
 });
 
@@ -46,6 +49,8 @@ test("a valid receipt: exit 0 and every check listed", async () => {
   for (const check of ["file", "registry", "chainId", "manifest", "agentSignature", "anchor", "merkleProof", "batch", "onchainProof", "anchorTx", "status"]) {
     assert.match(r.stdout, new RegExp(`^  pass  ${check}\\b`, "m"));
   }
+  assert.match(r.stdout, /^  skip  spend\b/m, "its only spend is in usd, which no chain can confirm");
+  assert.match(r.stdout, /^  spend\[0\] unchecked: 0\.0042 usd: no transaction named$/m);
   assert.match(r.stdout, /registry 0x[0-9a-fA-F]{40} \(--registry\)/);
   assert.match(r.stdout, /signed by the agent 0x90f79bf6eb2c4f870365e785982e1f101e93b906 \(ECDSA\)/);
   assert.match(r.stdout, /^VALID: in batch \d+, anchored by tx 0x[0-9a-f]{64}/m);
@@ -80,6 +85,19 @@ test("a tampered receipt: exit 1 with the reason", async () => {
   assert.match(r.stdout, /^  fail  manifest/m);
   assert.match(r.stdout, /^INVALID$/m);
   assert.match(r.stdout, /^  - manifest hash mismatch: the file's manifest hashes to 0x[0-9a-f]{64}, receipt says 0x[0-9a-f]{64}$/m);
+});
+
+test("a genuine receipt that names a payment the chain does not have: exit 1, and the verdict says the receipt itself holds", async () => {
+  const r = await cli(["verify", write("made-up-spend.json", files[3]), "--rpc", anvil.url, "--registry", registry]);
+  assert.equal(r.code, 1, r.stdout + r.stderr);
+  for (const check of ["manifest", "agentSignature", "batch", "onchainProof", "anchorTx"]) assert.match(r.stdout, new RegExp(`^  pass  ${check}\\b`, "m"));
+  assert.match(r.stdout, /^  fail  spend/m);
+  assert.match(r.stdout, /^  spend\[0\] contradicted: 1000 eip155:743111\/erc20:0xd479\w+: there is no transaction 0x(5a){32} on chain 743111$/m);
+  assert.match(r.stdout, /^INVALID: the receipt is genuine and anchored, but the chain contradicts what its manifest says was spent$/m);
+  const json = JSON.parse((await cli(["verify", write("made-up-spend2.json", files[3]), "--rpc", anvil.url, "--registry", registry, "--json"])).stdout);
+  assert.equal(json.valid, false);
+  assert.equal(json.authentic, true);
+  assert.equal(json.spend[0].outcome, "contradicted");
 });
 
 test("--manifest checks a separate manifest file", async () => {

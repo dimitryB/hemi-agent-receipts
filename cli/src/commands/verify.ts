@@ -13,6 +13,11 @@ chain, never from the file. RPCs default to the Hemi network's public RPCs.
 Exit status: 0 valid, 1 invalid, 2 usage error or the chain could not be read. The Bitcoin
 stage is reported but never changes validity.
 
+A spend entry that names a transaction on the receipt's own chain is compared with it, and
+one the chain contradicts makes the receipt invalid. Everything else in the manifest (tool
+calls, model, prompt and output) is the signer's word: the receipt proves who said it and by
+when, not that it happened.
+
 ${BTC_USAGE}`;
 
 const DESCRIPTIONS: Record<VerifyCheck, string> = {
@@ -27,6 +32,7 @@ const DESCRIPTIONS: Record<VerifyCheck, string> = {
   onchainProof: "registry.verifyReceipt is true",
   anchorTx: "anchoring tx found in the BatchAttested log",
   status: "finality stage read",
+  spend: "spend transactions on this chain match the manifest",
 };
 
 export async function verifyCommand(argv: string[], io: Io): Promise<number> {
@@ -75,6 +81,7 @@ export async function verifyCommand(argv: string[], io: Io): Promise<number> {
     const network = typeof chainId === "number" ? (HEMI_NETWORKS[chainId]?.name ?? `chain ${chainId}`) : "unknown chain";
     const lines = [`receipt ${runId}`, `  ${network}, registry ${registry} (${registrySource})`];
     for (const check of VERIFY_CHECKS) lines.push(`  ${result.checks[check].padEnd(5)} ${check.padEnd(15)}${DESCRIPTIONS[check]}`);
+    for (const s of result.spend) lines.push(`  spend[${s.index}] ${s.outcome}: ${s.amount} ${s.asset}: ${s.detail}`);
     if (result.signer) {
       const how = result.signer.method === "ecdsa" ? "ECDSA" : "EIP-1271 contract wallet";
       const whose = result.signer.role === "principal" ? ", not by the agent" : "";
@@ -92,7 +99,13 @@ export async function verifyCommand(argv: string[], io: Io): Promise<number> {
         for (const note of result.status.notes ?? []) lines.push(`  note ${note}`);
       }
     } else {
-      lines.push(result.incomplete ? "UNDETERMINED: the chain could not be read" : "INVALID");
+      lines.push(
+        result.incomplete
+          ? "UNDETERMINED: the chain could not be read"
+          : result.authentic
+            ? "INVALID: the receipt is genuine and anchored, but the chain contradicts what its manifest says was spent"
+            : "INVALID",
+      );
       for (const reason of result.reasons) lines.push(`  - ${reason}`);
       if (result.status) lines.push(`  stage ${result.status.stage}`);
     }

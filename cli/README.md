@@ -42,7 +42,10 @@ receipts verify receipts/0x<runId>.receipt.json                         # chain 
   `attest` stops and prints the price.
 - **verify** never contacts the service. The registry comes from `--registry` or the SDK's
   known deployment for the file's chain (`DEPLOYMENTS`), never from the file; RPCs default to
-  the network's public RPCs. It prints every check and the reasons for any failure.
+  the network's public RPCs. It prints every check and the reasons for any failure, and one
+  line per spend entry. A spend entry that names a transaction on the receipt's own chain is
+  compared with it; when only that fails, the verdict reads `INVALID: the receipt is genuine
+  and anchored, but the chain contradicts what its manifest says was spent`.
 - **Bitcoin finality** (`verify`, `status`): read from Bitcoin through Esplora with the SDK's
   per-network defaults; `--esplora`, `--pop-miner` and `--btc-scan` override them, `--no-btc`
   skips it. `status` re-checks an anchored receipt's stage locally (Hemi RPC + Bitcoin) and

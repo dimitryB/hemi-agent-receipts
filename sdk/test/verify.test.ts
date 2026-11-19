@@ -24,7 +24,7 @@ import {
   type Anvil,
   type FlakyRpc,
 } from "@hemi-receipts/e2e/lib";
-import { chainFor, createHemiPublicClient, hashManifest, receiptFromManifest, signReceipt, registryDomain, unavailableFinality, verify, VERIFY_CHECKS, type ReceiptFile, type VerifyResult } from "../src/index.js";
+import { chainFor, createHemiPublicClient, hashManifest, receiptFromManifest, signReceipt, registryDomain, unavailableFinality, verify, VERIFY_CHECKS, type ManifestV1, type ReceiptFile, type VerifyResult } from "../src/index.js";
 
 const CHAIN_ID = 743_111; // a Hemi chain id, so the domain and network lookups are realistic
 const owner = privateKeyToAccount(ANVIL_KEYS[ROLE.owner]!);
@@ -46,7 +46,10 @@ const fast = { requestsPerSecond: 500, burst: 100, retryDelayMs: 20, retryCount:
 function expectValid(result: VerifyResult) {
   assert.deepEqual(result.reasons, []);
   assert.equal(result.valid, true);
-  for (const check of VERIFY_CHECKS) assert.equal(result.checks[check], "pass", `check ${check}`);
+  assert.equal(result.authentic, true);
+  // makeManifest's only spend is in "usd", which no chain can confirm: the spend check is skipped.
+  for (const check of VERIFY_CHECKS) assert.equal(result.checks[check], check === "spend" ? result.checks.spend : "pass", `check ${check}`);
+  assert.notEqual(result.checks.spend, "fail");
 }
 
 function expectInvalid(result: VerifyResult, check: string, code: string, reason: RegExp) {
@@ -356,6 +359,146 @@ describe("contract-wallet signatures (EIP-1271)", () => {
     await client.waitForTransactionReceipt({ hash: setMode, pollingInterval: 50 });
     const rejected = await verify(anchored.files[0], { registry, rpcUrl: anvil.url, clientOptions: fast });
     expectInvalid(rejected, "agentSignature", "signature-mismatch", new RegExp(`contract wallet ${wallet} rejected it`));
+  });
+});
+
+describe("spend: what the manifest says was paid, compared with the receipt's chain", () => {
+  const TOKEN_ARTIFACT = resolve(REPO_ROOT, "contracts/artifacts/contracts/mocks/ERC20Mock.sol/ERC20Mock.json");
+  const skip = !existsSync(TOKEN_ARTIFACT) && "no ERC20Mock artifact (run npm run compile -w contracts)";
+  const agentAccount = privateKeyToAccount(ANVIL_KEYS[ROLE.agent]!);
+  const strangerAccount = privateKeyToAccount(ANVIL_KEYS[ROLE.stranger]!);
+  const payee = "0x000000000000000000000000000000000000beef" as Address;
+  let token: Address;
+  let otherToken: Address;
+  /** Real transactions: the agent pays 1000, the agent pays 999, a stranger pays 1000, a reverted one, and 5000 wei of ETH. */
+  const tx = {} as Record<"agent1000" | "agent999" | "stranger1000" | "reverted" | "eth5000", Hex>;
+  const asset = (t: Address) => `eip155:${CHAIN_ID}/erc20:${t}`;
+
+  before(async () => {
+    if (skip) return;
+    const artifact = JSON.parse(readFileSync(TOKEN_ARTIFACT, "utf8"));
+    const chain = chainFor(CHAIN_ID, [anvil.url]);
+    const walletOf = (account: typeof owner) => createWalletClient({ account, chain, transport: http(anvil.url) });
+    const wait = async (hash: Hex) => (await client.waitForTransactionReceipt({ hash, pollingInterval: 50 }));
+    const deploy = async () => (await wait(await walletOf(owner).deployContract({ abi: artifact.abi, bytecode: artifact.bytecode }))).contractAddress!.toLowerCase() as Address;
+    token = await deploy();
+    otherToken = await deploy();
+    for (const to of [agentAccount.address, strangerAccount.address]) await wait(await walletOf(owner).writeContract({ address: token, abi: artifact.abi, functionName: "mint", args: [to, 1_000_000n] }));
+    const pay = async (account: typeof owner, amount: bigint, gas?: bigint) =>
+      walletOf(account).writeContract({ address: token, abi: artifact.abi, functionName: "transfer", args: [payee, amount], ...(gas ? { gas } : {}) });
+    tx.agent1000 = await pay(agentAccount, 1000n);
+    tx.agent999 = await pay(agentAccount, 999n);
+    tx.stranger1000 = await pay(strangerAccount, 1000n);
+    tx.reverted = await pay(agentAccount, 10n ** 30n, 100_000n); // more than the balance; gas given, so it is sent and mined anyway
+    tx.eth5000 = await walletOf(agentAccount).sendTransaction({ to: payee, value: 5000n });
+    for (const hash of Object.values(tx)) await wait(hash);
+    assert.equal((await client.getTransactionReceipt({ hash: tx.reverted })).status, "reverted");
+  });
+
+  /** A receipt whose manifest lists `spend`, signed by the agent and anchored in a batch of one. */
+  const anchoredWith = async (spend: ManifestV1["spend"]) => {
+    const item = await signManifest({ manifest: makeManifest({ spend }), chainId: CHAIN_ID, registry });
+    return (await anchorDirect({ client, registry, serviceKey: ANVIL_KEYS[ROLE.service]!, item })).files[0]!;
+  };
+  const check = (file: ReceiptFile, more: Partial<Parameters<typeof verify>[1]> = {}) => verify(file, { registry, rpcUrl: anvil.url, clientOptions: fast, ...more });
+
+  test("a payment the agent really made is confirmed, and the receipt is valid", { skip }, async () => {
+    const result = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: tx.agent1000 }, { asset: "usd", amount: "0.5" }]));
+    expectValid(result);
+    assert.equal(result.checks.spend, "pass");
+    assert.equal(result.spend[0]!.outcome, "confirmed");
+    assert.equal(result.spend[0]!.payer, agentAccount.address.toLowerCase());
+    assert.match(result.spend[0]!.detail, /from the agent/);
+    assert.equal(result.spend[1]!.outcome, "unchecked", "usd is not on a chain");
+  });
+
+  test("a made-up transaction: the receipt is genuine and anchored, but invalid", { skip }, async () => {
+    const madeUp = `0x${"5a".repeat(32)}` as Hex;
+    const result = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: madeUp }]));
+    expectInvalid(result, "spend", "spend-tx-missing", new RegExp(`spend\\[0\\]: there is no transaction ${madeUp} on chain ${CHAIN_ID}`));
+    assert.equal(result.authentic, true);
+    for (const c of VERIFY_CHECKS) if (c !== "spend") assert.equal(result.checks[c], "pass", c);
+    assert.equal(result.spend[0]!.outcome, "contradicted");
+  });
+
+  test("a real transaction that moved a different amount, another token, or reverted is contradicted", { skip }, async () => {
+    const wrongAmount = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: tx.agent999 }]));
+    expectInvalid(wrongAmount, "spend", "spend-transfer-missing", /moved no 1000 of token 0x[0-9a-f]{40} \(it moved 999 of it\)/);
+    const wrongToken = await check(await anchoredWith([{ asset: asset(otherToken), amount: "1000", txHash: tx.agent1000 }]));
+    expectInvalid(wrongToken, "spend", "spend-transfer-missing", /it has no transfer of that token/);
+    const reverted = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: tx.reverted }]));
+    expectInvalid(reverted, "spend", "spend-tx-failed", /reverted, so it moved nothing/);
+    for (const r of [wrongAmount, wrongToken, reverted]) assert.equal(r.authentic, true);
+  });
+
+  test("someone else's payment of the same amount is reported, not credited: unattributed, still valid", { skip }, async () => {
+    const result = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: tx.stranger1000 }]));
+    expectValid(result);
+    assert.equal(result.spend[0]!.outcome, "unattributed");
+    assert.equal(result.spend[0]!.payer, strangerAccount.address.toLowerCase());
+    assert.match(result.spend[0]!.detail, /neither the agent nor the principal/);
+  });
+
+  test("native ETH: the transaction's own value from the agent is confirmed", { skip }, async () => {
+    const result = await check(await anchoredWith([{ asset: `eip155:${CHAIN_ID}/slip44:60`, amount: "5000", txHash: tx.eth5000 }]));
+    expectValid(result);
+    assert.equal(result.spend[0]!.outcome, "confirmed");
+    const other = await check(await anchoredWith([{ asset: `eip155:${CHAIN_ID}/slip44:60`, amount: "7", txHash: tx.eth5000 }]));
+    expectValid(other); // ETH sent inside a contract call is invisible without a trace, so a different value is not a contradiction
+    assert.equal(other.spend[0]!.outcome, "unchecked");
+  });
+
+  test("entries nothing on this chain can answer are unchecked, and the check is skipped", { skip }, async () => {
+    const result = await check(await anchoredWith([
+      { asset: asset(token), amount: "1000" },
+      { asset: `eip155:43111/erc20:${token}`, amount: "1000", txHash: `0x${"11".repeat(32)}` },
+      { asset: "usd", amount: "1", txHash: `0x${"22".repeat(32)}` },
+      { asset: asset(token), amount: "0.5", txHash: tx.agent1000 },
+    ]));
+    expectValid(result);
+    assert.equal(result.checks.spend, "skip");
+    assert.deepEqual(result.spend.map((s) => s.outcome), ["unchecked", "unchecked", "unchecked", "unchecked"]);
+    assert.match(result.spend[1]!.detail, /on chain 43111; only the receipt's own chain 743111 is read/);
+  });
+
+  test("a manifest that does not match the receipt is not used: no spend is checked", { skip }, async () => {
+    const file = clone(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: `0x${"5b".repeat(32)}` }]));
+    file.manifest!.model += "X";
+    const result = await check(file);
+    expectInvalid(result, "manifest", "manifest-hash-mismatch", /manifest hash mismatch/);
+    assert.equal(result.checks.spend, "skip");
+    assert.deepEqual(result.spend, []);
+    assert.equal(result.authentic, false);
+  });
+
+  test("a transaction not mined yet, or an RPC that fails on it, leaves the result undetermined", { skip }, async () => {
+    const pendingHash = `0x${"5c".repeat(32)}` as Hex;
+    const brokenHash = `0x${"5d".repeat(32)}` as Hex;
+    const template = await client.request({ method: "eth_getTransactionByHash", params: [tx.eth5000] });
+    const intercepting = createPublicClient({
+      chain: chainFor(CHAIN_ID, [anvil.url]),
+      transport: custom({
+        async request({ method, params }) {
+          const hash = (params as unknown[] | undefined)?.[0];
+          if (hash === brokenHash) throw new Error("upstream down");
+          if (hash === pendingHash && method === "eth_getTransactionReceipt") return null;
+          if (hash === pendingHash && method === "eth_getTransactionByHash") return { ...template!, hash: pendingHash, blockHash: null, blockNumber: null, transactionIndex: null };
+          return client.request({ method, params } as never);
+        },
+      }, { retryCount: 0 }),
+    }) as PublicClient;
+    const pending = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: pendingHash }]), { client: intercepting });
+    assert.equal(pending.valid, false);
+    assert.equal(pending.incomplete, true);
+    assert.equal(pending.spend[0]!.outcome, "undetermined");
+    assert.ok(pending.problems.some((p) => p.code === "spend-tx-pending"));
+    const broken = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: brokenHash }]), { client: intercepting });
+    assert.equal(broken.incomplete, true);
+    assert.ok(broken.problems.some((p) => p.check === "spend" && p.code === "rpc-error"));
+    // A contradiction elsewhere still decides: incomplete only while nothing has ruled the receipt out.
+    const mixed = await check(await anchoredWith([{ asset: asset(token), amount: "1000", txHash: brokenHash }, { asset: asset(token), amount: "1000", txHash: tx.agent999 }]), { client: intercepting });
+    assert.equal(mixed.incomplete, false);
+    assert.equal(mixed.valid, false);
   });
 });
 

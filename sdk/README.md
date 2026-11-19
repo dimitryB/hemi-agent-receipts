@@ -50,7 +50,7 @@ result.valid; result.reasons; result.checks; result.status?.stage;
 `verify` reads only the chain. The registry is the caller's trust root and is compared with
 the file's, never taken from it. Each check is reported in `checks` as `pass`, `fail` or
 `skip`; `valid` is true only when all pass (`manifest` may be skipped when no manifest is
-given). `reasons` say exactly what failed, e.g. `manifest hash mismatch: …`, `proof does not
+given, `spend` when no entry can be compared with the chain). `reasons` say exactly what failed, e.g. `manifest hash mismatch: …`, `proof does not
 verify against batch 3's root …`, `agent signature recovers to 0x…, expected agent 0x… or
 principal 0x…`. RPC failures after retries set `incomplete: true`, unless another problem already rules the receipt out, rather than claiming the
 receipt is invalid.
@@ -68,6 +68,9 @@ receipt is invalid.
 | `onchainProof` | `registry.verifyReceipt(batchId, receipt, proof)` is true |
 | `anchorTx` | the one-block `BatchAttested(batchId)` log came from `anchor.txHash`, which succeeded |
 | `status` | `resolveStatus` read the finality stage |
+| `spend` | every manifest spend entry that names a transaction on the receipt's chain agrees with it; skipped when none can be compared |
+
+`spend` lists one `SpendCheck` per entry: `confirmed` (the transaction moved exactly `amount` of the asset from the agent or principal), `unattributed` (it did, but from another address: reported, not credited), `contradicted` (no such transaction, it reverted, or it moved no such amount: the receipt is invalid), `unchecked` (no `txHash`, an asset not on this chain, a fractional amount, or native ETH moved inside a contract call) or `undetermined` (RPC failure or not mined yet). `authentic` is true when every check but `spend` passed. Everything else in the manifest is the signer's word.
 
 ## Bitcoin finality
 

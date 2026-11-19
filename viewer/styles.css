@@ -191,6 +191,9 @@ textarea { font-family: var(--mono); font-size: 0.85rem; resize: vertical; margi
    page, and the minimum width keeps ordinary words whole when a long one takes the room. */
 .spend td { padding: 6px 8px 6px 0; border-bottom: 1px solid var(--edge); vertical-align: top; overflow-wrap: anywhere; min-width: 6em; }
 .spend .num { font-variant-numeric: tabular-nums; font-weight: 600; }
+.spend .spend-good { color: var(--text); }
+.spend .spend-bad { color: var(--bad); font-weight: 600; }
+.spend .spend-wait, .spend .spend-unknown { color: var(--text-2); }
 
 /* ---------------------------------------------------------------- verdict */
 

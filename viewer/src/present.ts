@@ -11,6 +11,7 @@ import {
   STAGES,
   type ManifestV1,
   type ReceiptFile,
+  type SpendCheck,
   type Stage,
   type StatusInfo,
   type VerifyCheck,
@@ -164,8 +165,8 @@ export interface Verdict {
   summary: string;
 }
 
-/** Problems that say nothing about the receipt itself: the network did not answer, or changed while being read. */
-const TRANSIENT_CODES = new Set(["rpc-error", "anchor-reorged"]);
+/** Problems that say nothing about the receipt itself: the network did not answer, changed while being read, or has not mined a payment yet. */
+const TRANSIENT_CODES = new Set(["rpc-error", "anchor-reorged", "spend-tx-pending"]);
 
 /** A problem that settles the matter whatever the network says (not a missing answer, not merely pending). */
 export const isDefinite = (p: VerifyProblem): boolean => !TRANSIENT_CODES.has(p.code) && p.code !== "not-anchored";
@@ -176,6 +177,15 @@ export const isDefinite = (p: VerifyProblem): boolean => !TRANSIENT_CODES.has(p.
  */
 export function verdictOf(file: ReceiptFile, result: VerifyResult, ctx: { offline?: boolean } = {}): Verdict {
   const definite = result.problems.find(isDefinite);
+  if (definite && result.authentic) {
+    // Signed and recorded, but a payment it lists is contradicted by the chain.
+    const who = result.signer?.role === "principal" ? "the person or organisation the agent acted for" : "the agent";
+    return {
+      tone: "bad",
+      title: "Genuine receipt, but a payment it lists is false",
+      summary: `The receipt was signed by ${who}, recorded on ${networkName(file.chainId)} and has not been changed since. But ${networkName(file.chainId)} contradicts what it says was paid. ${plainProblem(definite)}`,
+    };
+  }
   if (definite) {
     return { tone: "bad", title: "This receipt does not check out", summary: plainProblem(definite) };
   }
@@ -231,7 +241,7 @@ export function verdictOf(file: ReceiptFile, result: VerifyResult, ctx: { offlin
   return {
     tone: "good",
     title: "This receipt is genuine",
-    summary: `It was signed by ${who}, recorded on ${networkName(file.chainId)}${batch}, and every check passed${file.manifest ? ", including the full record of the run" : ""}.`,
+    summary: `It was signed by ${who}, recorded on ${networkName(file.chainId)}${batch}, and every check passed${file.manifest ? ", including that the record of the run is unchanged" : ""}.`,
   };
 }
 
@@ -292,6 +302,14 @@ export function plainProblem(p: VerifyProblem): string {
       return "The network did not answer this question.";
     case "anchor-reorged":
       return "Hemi replaced the block this receipt was recorded in while it was being checked. The result does not stand; check again in a few minutes.";
+    case "spend-tx-missing":
+      return "A payment the run lists never happened: the transaction it names does not exist.";
+    case "spend-tx-failed":
+      return "A payment the run lists failed: the transaction it names was reverted and moved nothing.";
+    case "spend-transfer-missing":
+      return "A payment the run lists does not match: the transaction it names did not move that amount of that asset.";
+    case "spend-tx-pending":
+      return "A payment the run lists has not gone through yet.";
     default:
       return p.message;
   }
@@ -310,7 +328,33 @@ export const CHECK_TEXT: Record<VerifyCheck, { title: string; skip?: string }> =
   onchainProof: { title: "Hemi's registry confirms the proof" },
   anchorTx: { title: "The recording transaction is the real one" },
   status: { title: "Its progress toward finality could be read" },
+  spend: { title: "The payments it lists match the network", skip: "None of the payments it lists could be compared with the network" },
 };
+
+/**
+ * One payment line's result, in words. Only payments can be checked this way: the tools, the
+ * model, the prompt and the output stay what the signer wrote.
+ */
+export function spendStatus(check: SpendCheck | undefined, file: ReceiptFile): { tone: Tone; text: string } {
+  const network = networkName(file.chainId);
+  if (!check) return { tone: "unknown", text: "Not checked" };
+  const role = check.payer === file.receipt.agent ? "the agent" : "the person it acted for";
+  switch (check.outcome) {
+    case "confirmed":
+      return { tone: "good", text: `Paid by ${role}, confirmed on ${network}` };
+    case "unattributed":
+      return { tone: "unknown", text: `Paid on ${network}, but by another account (${short(check.payer ?? "")}), so not shown to be this run's` };
+    case "contradicted":
+      return { tone: "bad", text: /no transaction/.test(check.detail) ? `No such transaction on ${network}` : /reverted/.test(check.detail) ? "The transaction failed" : "The transaction moved a different amount or asset" };
+    case "undetermined":
+      return { tone: "unknown", text: /not mined/.test(check.detail) ? "Not gone through yet" : `${network} did not answer` };
+    case "unchecked":
+      if (!check.txHash) return { tone: "unknown", text: "No transaction named, so not checked" };
+      if (!/^eip155:\d+\//.test(check.asset)) return { tone: "unknown", text: "Not an asset on a network, so not checked" };
+      if (!check.asset.startsWith(`eip155:${file.chainId}/`)) return { tone: "unknown", text: "On another network, so not checked here" };
+      return { tone: "unknown", text: "Could not be checked" };
+  }
+}
 
 export function checkTone(outcome: "pass" | "fail" | "skip"): Tone {
   return outcome === "pass" ? "good" : outcome === "fail" ? "bad" : "unknown";

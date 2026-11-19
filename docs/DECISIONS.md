@@ -592,6 +592,32 @@ A second review on 2026-11-15 reported five findings, two of them against D-15's
 
 The test stand-in for Permit2, the token and the proxy (`service/test/fixtures/SettleStub.sol`) now receives the facilitator's real settlement calldata, so the tests exercise the decoding.
 
+## D-17. Checking spend against the chain
+
+**Question.** What does a receipt say about a run whose agent made its record up? Verification checks who signed the manifest and that it has not changed since it was anchored. A manifest listing tool calls that never happened, a different model or a payment that was never made verifies like an honest one.
+
+**Decision.** `verify` compares the one claim the chain can answer: a spend entry with a `txHash` whose asset is a CAIP-19 ERC-20 token (`eip155:<chainId>/erc20:<token>`) or native ETH (`eip155:<chainId>/slip44:60`) on the receipt's own chain, with a whole-number amount in base units. It reads the transaction from the RPC it already uses and reports one `SpendCheck` per entry:
+
+| Outcome | When | Effect |
+|------|------|------|
+| `confirmed` | the transaction succeeded and a `Transfer` of the token (or the transaction's own ETH value) of exactly `amount` came from the agent or the principal | none |
+| `unattributed` | such a transfer exists, but from another address | reported, not credited |
+| `contradicted` | no such transaction (`spend-tx-missing`), it reverted (`spend-tx-failed`), or it moved no `amount` of that token (`spend-transfer-missing`) | the receipt is invalid |
+| `unchecked` | no `txHash`, an asset that is not on this chain or not on a chain at all, a fractional amount, native ETH whose value is not in the transaction itself, or more than 100 distinct transactions | none |
+| `undetermined` | the RPC failed, or the transaction is not mined yet (`spend-tx-pending`) | `incomplete`, unless something else rules the receipt out |
+
+`VerifyResult.authentic` is true when every check but `spend` passed, so the CLI and the viewer can say "genuine and anchored, but the chain contradicts what it says was spent" instead of a bare INVALID. Only a manifest whose hash matches the receipt is compared.
+
+**Why a contradiction invalidates the receipt.** The receipt is a signed statement about a run. When the chain shows that part of the statement is false, the receipt is not a true record, and an exit code of 0 would let a script accept it. Reporting the spend separately from `valid` was the alternative; it keeps "authentic" crisp but shows VALID for a receipt that claims a payment that never happened.
+
+**Why a payment from someone else is not a contradiction.** Schema v1 has no payer field and is frozen, so a manifest cannot say who paid. An operator may pay from a treasury that is neither the agent nor the principal. A matching transfer from another address shows the payment happened; it does not tie it to this run, which is what `unattributed` says.
+
+**What stays the signer's word.** Tool calls (names, inputs, results, times), the model, the prompt, the output and the run's start and end. They are hashed and signed, so anyone holding the real data can hash it and compare, and a mismatch is attributable to the signing key, but nothing on chain can confirm them. Two limits also remain for spend: one real payment can be named by any number of receipts, since `verify` sees one receipt at a time; and only the receipt's own chain is read, so a payment on another chain, including the other Hemi network, is `unchecked`.
+
+**Found while adding it.** `examples/trace.jsonl` listed `txHash 0x16566645…3551` on Hemi testnet. No such transaction exists there (`eth_getTransactionReceipt` and `eth_getTransactionByHash` both return null), so every testnet receipt in `demo/` and the viewer's testnet examples now fail `spend`. The example no longer names a transaction. The anchored receipts cannot change; the viewer's testnet example is relabelled to say what it now shows, and the README's verify example uses a mainnet receipt, for which the same testnet hash is not checked.
+
+**Tests.** `sdk/test/verify.test.ts` makes real transfers with a test-only token (`contracts/contracts/mocks/ERC20Mock.sol`) on anvil and covers every outcome: the agent's own payment, a made-up hash, a different amount, another token, a reverted transfer, a stranger's payment, native ETH, entries nothing can answer, a manifest that does not match, a pending transaction and a failing RPC. Seven mutations of the check (a missing transaction not failed, any payer counted, the amount ignored, an unmatched manifest used, `authentic` always true, pending made definite, a revert ignored) each fail a test. The CLI and viewer tests cover the new verdict and wording.
+
 ## Open questions
 
 Findings this build reports back rather than resolving alone.

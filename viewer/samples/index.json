@@ -1,6 +1,6 @@
 [
   { "id": "mainnet", "label": "Genuine receipt (Hemi mainnet, batch 1)", "file": "mainnet.receipt.json" },
-  { "id": "genuine", "label": "Genuine receipt (Hemi testnet, batch 6)", "file": "genuine.receipt.json" },
+  { "id": "genuine", "label": "Signed and recorded, but lists a payment that never happened (Hemi testnet, batch 6)", "file": "genuine.receipt.json" },
   { "id": "private", "label": "Genuine receipt, run details kept private", "file": "private.receipt.json" },
   { "id": "tampered", "label": "Tampered: one byte of the run record changed", "file": "tampered-one-byte.receipt.json" },
   { "id": "forged", "label": "Forged: signed by someone other than the agent", "file": "forged-signature.receipt.json" },

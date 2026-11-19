@@ -35,6 +35,7 @@ import {
   runView,
   showProgress,
   short,
+  spendStatus,
   usesOfficialTrust,
   utc,
   verdictOf,
@@ -354,14 +355,22 @@ function runSections(file: ReceiptFile, m: ManifestV1): HTMLElement[] {
     ),
   );
 
-  const spend = h("table", { class: "spend" }, h("thead", {}, h("tr", {}, h("th", {}, "Amount"), h("th", {}, "Paid in"), h("th", {}, "Payment"))));
+  const spend = h("table", { class: "spend" }, h("thead", {}, h("tr", {}, h("th", {}, "Amount"), h("th", {}, "Paid in"), h("th", {}, "Payment"), h("th", {}, "On the network"))));
   const body = h("tbody", {});
-  for (const s of v.spend) {
+  v.spend.forEach((s, i) => {
     const tx = s.txHash ? link(explorerTxUrl(file.chainId, s.txHash), short(s.txHash, 4)) : h("span", { class: "muted" }, "—");
-    body.append(h("tr", {}, h("td", { class: "num" }, s.amount), h("td", {}, s.asset, s.note ? h("span", { class: "muted small" }, ` (${s.note})`) : null), h("td", {}, tx)));
-  }
+    // Filled in by renderSpendChecks once the network has been asked.
+    const status = h("td", { "data-spend": String(i), class: "spend-unknown" }, "Checking…");
+    body.append(h("tr", {}, h("td", { class: "num" }, s.amount), h("td", {}, s.asset, s.note ? h("span", { class: "muted small" }, ` (${s.note})`) : null), h("td", {}, tx), status));
+  });
   spend.append(body);
-  sections.push(h("section", { class: "block" }, h("h3", {}, "What it spent"), v.spend.length ? spend : h("p", { class: "muted" }, "Nothing.")));
+  sections.push(
+    h("section", { class: "block" },
+      h("h3", {}, "What it spent"),
+      v.spend.length ? spend : h("p", { class: "muted" }, "Nothing."),
+      v.spend.length ? h("p", { class: "muted small" }, "A payment that names a transaction on this receipt's network is compared with that transaction. Everything else in the record is what the signer wrote.") : null,
+    ),
+  );
 
   const extras: HTMLElement[] = [];
   if (v.tags.length) extras.push(row("Tags", ...v.tags.map((t) => h("span", { class: "tag" }, t))));
@@ -408,7 +417,7 @@ function renderResult(file: ReceiptFile, result: VerifyResult, registry: Address
   // Any further problems, in plain words (the summary and repeats dropped; when the network
   // could not be reached at all, the notice already says so once).
   const shown = result.problems.filter((p) => !(offline && p.code === "rpc-error") && !(verdict.tone === "wait" && p.code === "not-anchored"));
-  const plain = [...new Set(shown.map(plainProblem))].filter((text) => text !== verdict.summary);
+  const plain = [...new Set(shown.map(plainProblem))].filter((text) => !verdict.summary.includes(text));
   if (plain.length) {
     const list = h("ul", { class: "problems" });
     for (const text of plain) list.append(h("li", {}, text));
@@ -428,6 +437,7 @@ function renderResult(file: ReceiptFile, result: VerifyResult, registry: Address
     );
   } else renderLadder(ladder, file, result);
   renderChecksAndProof(file, result, registry, rpc, mode);
+  renderSpendChecks(file, result, mode);
 }
 
 function renderLadder(ladder: HTMLElement, file: ReceiptFile, result: VerifyResult): void {
@@ -453,6 +463,17 @@ function renderLadder(ladder: HTMLElement, file: ReceiptFile, result: VerifyResu
   const btc = plainBitcoin(result.status, file.chainId);
   if (btc && btc.tone === "unknown" && result.status?.btc?.detail) {
     ladder.append(h("details", { class: "more" }, h("summary", {}, "Why, in technical terms"), h("p", { class: "mono small" }, result.status.btc.detail)));
+  }
+}
+
+/** The "On the network" column of the spend table, from verify's per-payment results. */
+function renderSpendChecks(file: ReceiptFile, result: VerifyResult, mode: Mode): void {
+  for (const cell of document.querySelectorAll<HTMLElement>("[data-spend]")) {
+    const check = result.spend?.find((s) => s.index === Number(cell.dataset.spend));
+    const status = mode.kind === "offline" && !check ? { tone: "unknown" as Tone, text: "Needs the network" } : spendStatus(check, file);
+    cell.className = `spend-${status.tone}`;
+    cell.textContent = status.text;
+    if (check) cell.title = check.detail;
   }
 }
 

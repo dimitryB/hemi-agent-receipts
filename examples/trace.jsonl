@@ -1,7 +1,7 @@
 {"type":"run","agent":"0x90f79bf6eb2c4f870365e785982e1f101e93b906","principal":"0x15d34aaf54267db7d7c367839aaf71a00a2c6a65","model":"claude-fable-5-1","startedAt":"2026-10-29T14:02:11Z","tags":["research","hemi-pop"],"prompt":"How often did Hemi publish PoP keystones to Bitcoin this week, and what does it cost to make an agent receipt Bitcoin-final?"}
 {"type":"tool_call","name":"web_search","at":1793282534,"args":{"query":"Hemi proof-of-proof keystone interval bitcoin finality","limit":5},"result":{"hits":[{"title":"Proof-of-Proof (PoP) mining","url":"https://docs.hemi.xyz/how-to-tutorials/pop-mining"},{"title":"Bitcoin finality on Hemi","url":"https://docs.hemi.xyz/main/bitcoin-finality"}]}}
 {"type":"tool_call","name":"fetch_url","at":1793282541,"args":{"url":"https://docs.hemi.xyz/main/bitcoin-finality"},"result":"<!doctype html><html><head><title>Bitcoin finality</title></head><body><p>A Hemi block is Bitcoin-final nine Bitcoin blocks after the keystone covering it is published by a PoP miner.</p></body></html>"}
-{"type":"spend","asset":"eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443","amount":"1000","txHash":"0x16566645a8ddbc2aff315d0b86c26bc9207842dcf903a637412898b910593551"}
+{"type":"spend","asset":"eip155:743111/erc20:0xd47971c7f5b1067d25cd45d30b2c9eb60de96443","amount":"1000"}
 {"type":"tool_call","name":"rpc_call","at":1793282556,"args":{"chainId":743111,"method":"eth_blockNumber","params":[]},"resultHash":"0x9c22ff5f21f0b81b113e63f7db6da94fedef11b2119b4088b89664fb9a3cb658"}
 {"type":"tool_call","name":"run_python","at":1793282589,"args":{"code":"import statistics\nintervals=[96,101,99,104,97,100]\nprint(statistics.mean(intervals))"},"result":{"stdout":"99.5\n","exitCode":0}}
 

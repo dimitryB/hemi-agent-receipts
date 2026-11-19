@@ -70,6 +70,8 @@ Further rules:
 
 The SDK's `validateManifest` checks exactly these rules and never changes the input. `normalizeManifest` first fixes what has an unambiguous fix (hex case, members set to `undefined`) and then validates.
 
+**What `verify` does with a spend entry.** Nothing here changes a manifest's validity. `verify` (§2) compares an entry with the chain only when it has a `txHash`, its asset is `eip155:<chainId>/erc20:<token>` or `eip155:<chainId>/slip44:60` on the receipt's own chain, and its amount is a whole number of base units. The transaction must exist, have succeeded and moved exactly `amount` of that asset; one that does not makes the receipt invalid (D-17).
+
 **Payload hash convention.** The schema only requires `promptHash`, `outputHash`, `argsHash` and `resultHash` to be 32 bytes. The SDK's `contentHash` uses keccak256 of a string's UTF-8 bytes, of a byte array's bytes, or of any other JSON value's RFC 8785 canonical form. `receipts from-trace` uses the same convention.
 
 ### 1.3 Canonicalization and the manifest hash

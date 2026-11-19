@@ -2,14 +2,19 @@ import {
   BaseError,
   ContractFunctionRevertedError,
   ContractFunctionZeroDataError,
+  erc20Abi,
+  parseEventLogs,
   recoverTypedDataAddress,
+  TransactionNotFoundError,
+  TransactionReceiptNotFoundError,
   type Address,
   type Hex,
+  type Log,
   type PublicClient,
 } from "viem";
 import { receiptRegistryAbi } from "./abi.js";
 import { createHemiPublicClient, type HemiClientOptions } from "./client.js";
-import { hashManifest, validateManifest } from "./manifest.js";
+import { hashManifest, validateManifest, type ManifestV1 } from "./manifest.js";
 import { verifyMerkleProof } from "./merkle.js";
 import { isCanonicalEcdsaSignature, leafHash, receiptTypedData, registryDomain, type ReceiptFields } from "./receipt.js";
 import { defaultFinalityReader } from "./finality.js";
@@ -43,10 +48,47 @@ export const VERIFY_CHECKS = [
   "anchorTx",
   /** The finality stage could be read (resolveStatus), and the block it was read for still carries the anchor (a reorg fails this). */
   "status",
+  /**
+   * The manifest's spend entries that name a transaction on the receipt's own chain agree with
+   * it (see SpendCheck). Fails when the chain contradicts one. Skipped when there is no checked
+   * manifest or no entry can be compared with the chain.
+   */
+  "spend",
 ] as const;
 
 export type VerifyCheck = (typeof VERIFY_CHECKS)[number];
 export type CheckOutcome = "pass" | "fail" | "skip";
+
+/**
+ * What the chain says about one spend entry. Only `contradicted` makes a receipt invalid.
+ * - `confirmed`: the transaction succeeded and moved exactly `amount` of the asset from the
+ *   agent or the principal.
+ * - `unattributed`: it moved exactly `amount` of the asset, but from another address. The payment
+ *   happened; nothing ties it to this run.
+ * - `contradicted`: there is no such transaction, it reverted, or it moved no `amount` of the asset.
+ * - `unchecked`: nothing on this chain to compare: no txHash, an asset that is not a token on
+ *   this chain, or native ETH moved inside a contract call.
+ * - `undetermined`: the RPC failed, or the transaction is not mined yet.
+ */
+export type SpendOutcome = "confirmed" | "unattributed" | "contradicted" | "unchecked" | "undetermined";
+
+export interface SpendCheck {
+  /** Position in the manifest's spend list. */
+  index: number;
+  asset: string;
+  amount: string;
+  txHash: Hex | null;
+  outcome: SpendOutcome;
+  /** Where the matching transfer came from, when one was found. */
+  payer?: Address;
+  /** The block that holds the transaction, when it was found mined. */
+  blockNumber?: number;
+  /** What was found, or why the entry was not compared. */
+  detail: string;
+}
+
+/** At most this many distinct spend transactions are read per receipt; entries naming more are reported unchecked. */
+export const MAX_SPEND_TXS = 100;
 
 export interface VerifyProblem {
   check: VerifyCheck;
@@ -80,8 +122,15 @@ export interface VerifyOptions {
 }
 
 export interface VerifyResult {
-  /** True only when every check passed (the manifest check may be skipped when no manifest is given). */
+  /** True only when every check passed (the manifest and spend checks may be skipped). */
   valid: boolean;
+  /**
+   * True when every check except `spend` passed: the receipt is genuine, signed and anchored.
+   * With `valid` false, it is only what the manifest says was spent that does not hold.
+   */
+  authentic: boolean;
+  /** One entry per spend item of the checked manifest; empty when there is none or it did not check out. */
+  spend: SpendCheck[];
   /** Finality of the anchoring block; `pending` when not anchored, `voided` for a voided batch, null when unknown. */
   status: StatusInfo | null;
   /** The transaction that emitted BatchAttested for this batch, as read from the chain. */
@@ -102,7 +151,10 @@ export interface VerifyResult {
 
 const BYTES32_ANY = /^0x[0-9a-fA-F]{64}$/;
 /** Problems that do not rule a receipt out: the chain did not answer or changed, or it is not anchored yet. */
-const UNDECIDED_CODES = new Set(["rpc-error", "anchor-reorged", "not-anchored"]);
+const UNDECIDED_CODES = new Set(["rpc-error", "anchor-reorged", "not-anchored", "spend-tx-pending"]);
+/** A CAIP-19 id this check can read: an ERC-20 token, or native ETH (slip44:60), on an eip155 chain. */
+const CAIP19_EVM = /^eip155:([1-9][0-9]{0,15})\/(?:erc20:(0x[0-9a-fA-F]{40})|slip44:60)$/;
+const WHOLE = /^(0|[1-9][0-9]*)$/;
 const ADDRESS_ANY = /^0x[0-9a-fA-F]{40}$/;
 const HEX_ANY = /^0x([0-9a-fA-F]{2})+$/;
 const ERC6492_SUFFIX = "6492649264926492649264926492649264926492649264926492649264926492";
@@ -192,6 +244,40 @@ function classify(error: unknown): ReadError {
   return { kind: "rpc", message: error instanceof Error ? error.message : String(error) };
 }
 
+type SpendTx =
+  | { kind: "missing" }
+  | { kind: "pending" }
+  | { kind: "mined"; success: boolean; blockNumber: number; logs: Log[]; from: Address; value?: bigint }
+  | { kind: "error"; error: unknown };
+
+const notFound = (error: unknown, type: typeof TransactionNotFoundError | typeof TransactionReceiptNotFoundError): boolean =>
+  error instanceof BaseError && !!error.walk((e) => e instanceof type);
+
+/** A spend transaction as the chain has it. `withValue` also reads the transaction for its ETH value. */
+async function readSpendTx(client: PublicClient, hash: Hex, withValue: boolean): Promise<SpendTx> {
+  let receipt;
+  try {
+    receipt = await client.getTransactionReceipt({ hash });
+  } catch (error) {
+    if (!notFound(error, TransactionReceiptNotFoundError)) return { kind: "error", error };
+    // No receipt: either never sent, or still waiting in a mempool.
+    try {
+      const tx = await client.getTransaction({ hash });
+      if (tx.blockNumber === null) return { kind: "pending" };
+      return { kind: "error", error: new Error(`transaction ${hash} was mined while it was being read`) };
+    } catch (error2) {
+      return notFound(error2, TransactionNotFoundError) ? { kind: "missing" } : { kind: "error", error: error2 };
+    }
+  }
+  const mined = { kind: "mined" as const, success: receipt.status === "success", blockNumber: Number(receipt.blockNumber), logs: receipt.logs, from: lower(receipt.from) };
+  if (!withValue) return mined;
+  try {
+    return { ...mined, value: (await client.getTransaction({ hash })).value };
+  } catch (error) {
+    return { kind: "error", error };
+  }
+}
+
 /** Verifies a receipt file. See VERIFY_CHECKS for what is checked; reasons say what failed. */
 export async function verify(input: unknown, options: VerifyOptions): Promise<VerifyResult> {
   if (typeof options?.registry !== "string" || !ADDRESS_ANY.test(options.registry)) {
@@ -204,6 +290,8 @@ export async function verify(input: unknown, options: VerifyOptions): Promise<Ve
   let batchTx: Hex | null = null;
   let leaf: Hex | null = null;
   let signer: VerifyResult["signer"] = null;
+  let checkedManifest: ManifestV1 | undefined;
+  const spend: SpendCheck[] = [];
 
   const fail = (check: VerifyCheck, code: string, message: string) => {
     checks[check] = "fail";
@@ -217,9 +305,11 @@ export async function verify(input: unknown, options: VerifyOptions): Promise<Ve
     fail(check, "rpc-error", `${what}: RPC failed after retries: ${classify(error).message}`);
   };
   const finish = (): VerifyResult => {
-    const valid = problems.length === 0 && VERIFY_CHECKS.every((c) => checks[c] === "pass" || (c === "manifest" && checks[c] === "skip"));
+    const holds = (c: VerifyCheck) => checks[c] === "pass" || ((c === "manifest" || c === "spend") && checks[c] === "skip");
+    const valid = problems.length === 0 && VERIFY_CHECKS.every(holds);
+    const authentic = problems.every((p) => p.check === "spend") && VERIFY_CHECKS.every((c) => c === "spend" || holds(c));
     const undecided = incomplete && problems.every((p) => UNDECIDED_CODES.has(p.code));
-    return { valid, status, batchTx, leaf, reasons: problems.map((p) => p.message), problems, checks, signer, incomplete: undecided };
+    return { valid, authentic, spend, status, batchTx, leaf, reasons: problems.map((p) => p.message), problems, checks, signer, incomplete: undecided };
   };
 
   // file
@@ -259,6 +349,8 @@ export async function verify(input: unknown, options: VerifyOptions): Promise<Ve
         fail("manifest", "manifest-field-mismatch", `manifest receiptVersion ${m.receiptVersion} differs from receipt schemaVersion ${receipt.schemaVersion}`);
       }
       pass("manifest");
+      // Only a manifest the receipt commits to says anything about this run.
+      if (checks.manifest === "pass") checkedManifest = m;
     }
   }
 
@@ -350,113 +442,210 @@ export async function verify(input: unknown, options: VerifyOptions): Promise<Ve
     }
   }
 
-  if (anchor === null || !chainOk) return finish();
-
-  // batch
-  const batchId = BigInt(anchor.batchId);
-  let batch: { root: Hex; count: number; schemaVersion: number; voided: boolean; blockNumber: bigint } | undefined;
-  try {
-    const b = await client.readContract({ address: registry, abi: receiptRegistryAbi, functionName: "getBatch", args: [batchId] });
-    batch = { root: lower(b.root), count: b.count, schemaVersion: b.schemaVersion, voided: b.voided, blockNumber: b.blockNumber };
-  } catch (error) {
-    const e = classify(error);
-    if (e.kind === "revert") fail("batch", "batch-unknown", `batch ${anchor.batchId} does not exist on registry ${registry} (getBatch reverted: ${e.name})`);
-    else if (e.kind === "no-data") fail("batch", "registry-no-code", `no ReceiptRegistry at ${registry} on chain ${file.chainId} (getBatch returned no data)`);
-    else rpcFail("batch", `getBatch(${anchor.batchId})`, error);
-    return finish();
-  }
-  if (/^0x0+$/.test(batch.root) && batch.blockNumber === 0n) {
-    fail("batch", "batch-unknown", `batch ${anchor.batchId} does not exist on registry ${registry}`);
-    return finish();
-  }
-  if (batch.voided) {
-    fail("batch", "batch-voided", `batch ${anchor.batchId} was voided by the registry owner; its receipts no longer verify`);
-    status = { stage: "voided", estimated: false, checkedAt: Math.floor(Date.now() / 1000), notes: [`batch ${anchor.batchId} voided`] };
-  }
-  if (batch.root !== anchor.root) {
-    fail("batch", "batch-root-mismatch", `batch ${anchor.batchId}'s on-chain root is ${batch.root}, but the receipt's anchor says ${anchor.root}`);
-  }
-  if (batch.schemaVersion !== receipt.schemaVersion) {
-    fail("batch", "batch-schema-mismatch", `batch ${anchor.batchId} holds schemaVersion ${batch.schemaVersion} receipts, but this receipt is schemaVersion ${receipt.schemaVersion}`);
-  }
-  if (anchor.mode === "direct" && batch.count !== 1) {
-    fail("batch", "batch-count-mismatch", `anchor says mode "direct" (a batch of one), but batch ${anchor.batchId} holds ${batch.count} receipts`);
-  }
-  pass("batch");
-
-  // on-chain proof
-  try {
-    const ok = await client.readContract({
-      address: registry,
-      abi: receiptRegistryAbi,
-      functionName: "verifyReceipt",
-      args: [batchId, receipt, anchor.proof],
-    });
-    if (ok) pass("onchainProof");
-    else if (batch.voided) fail("onchainProof", "proof-onchain-false", `registry.verifyReceipt returned false: batch ${anchor.batchId} is voided`);
-    else fail("onchainProof", "proof-onchain-false", `registry.verifyReceipt returned false: proof does not verify against batch ${anchor.batchId}'s root ${batch.root}`);
-  } catch (error) {
-    const e = classify(error);
-    if (e.kind === "rpc") rpcFail("onchainProof", "verifyReceipt", error);
-    else fail("onchainProof", "proof-onchain-false", `registry.verifyReceipt(${anchor.batchId}) failed: ${e.kind === "revert" ? (e.name ?? e.message) : e.message}`);
-  }
-
-  // the anchoring transaction, found from the chain rather than trusted from the file
-  let anchorBlockHash: Hex | undefined;
-  try {
-    const logs = await client.getContractEvents({
-      address: registry,
-      abi: receiptRegistryAbi,
-      eventName: "BatchAttested",
-      args: { batchId },
-      fromBlock: batch.blockNumber,
-      toBlock: batch.blockNumber,
-      strict: true,
-    });
-    const log = logs.find((l) => l.args.batchId === batchId);
-    if (!log) {
-      fail("anchorTx", "anchor-tx-missing", `no BatchAttested(${anchor.batchId}) log from registry ${registry} in block ${batch.blockNumber}, where the registry says the batch was recorded`);
-    } else {
-      batchTx = lower(log.transactionHash);
-      anchorBlockHash = log.blockHash;
-      if (batchTx !== anchor.txHash) {
-        fail("anchorTx", "anchor-tx-mismatch", `batch ${anchor.batchId} was anchored by tx ${batchTx}, but the receipt's anchor says tx ${anchor.txHash}`);
-      }
-      if (Number(batch.blockNumber) !== anchor.blockNumber) {
-        fail("anchorTx", "anchor-block-mismatch", `batch ${anchor.batchId} was anchored in block ${batch.blockNumber}, but the receipt's anchor says block ${anchor.blockNumber}`);
-      }
-      if (lower(log.args.root) !== batch.root) {
-        fail("anchorTx", "anchor-log-mismatch", `BatchAttested(${anchor.batchId}) log carries root ${log.args.root}, but getBatch says ${batch.root}`);
-      }
-      const txReceipt = await client.getTransactionReceipt({ hash: log.transactionHash });
-      if (txReceipt.status !== "success") fail("anchorTx", "anchor-tx-failed", `anchoring tx ${batchTx} did not succeed (status ${txReceipt.status})`);
-      pass("anchorTx");
-    }
-  } catch (error) {
-    rpcFail("anchorTx", "reading the anchoring transaction", error);
-  }
-
-  // status: only for a receipt the chain actually includes
-  if (!batch.voided && checks.batch === "pass" && checks.onchainProof === "pass") {
+  // The anchor, read from the chain. Runs only for an anchored receipt on the right chain.
+  async function checkAnchor(anchor: Anchor): Promise<void> {
+    // batch
+    const batchId = BigInt(anchor.batchId);
+    let batch: { root: Hex; count: number; schemaVersion: number; voided: boolean; blockNumber: bigint } | undefined;
     try {
-      status = await resolveStatus({
-        client,
-        blockNumber: batch.blockNumber,
-        confirmations: options.confirmations,
-        finality: options.finality ?? defaultFinalityReader(file.chainId),
-        anchorBlockHash,
-      });
-      // resolveStatus answers `pending` here only when the block at the anchor's height no longer
-      // has the hash the BatchAttested log was read from: the chain changed between two reads
-      // (a reorg in progress, or RPCs behind a load balancer disagreeing). The checks above passed
-      // against a view that is gone, so the receipt is not verified; it may be again once settled.
-      if (status.stage === "pending") {
-        incomplete = true;
-        fail("status", "anchor-reorged", `${status.notes?.[0] ?? `block ${batch.blockNumber} no longer carries the anchor`}; the chain changed while verifying, so this result does not stand: verify again once the reorg settles`);
-      } else pass("status");
+      const b = await client.readContract({ address: registry, abi: receiptRegistryAbi, functionName: "getBatch", args: [batchId] });
+      batch = { root: lower(b.root), count: b.count, schemaVersion: b.schemaVersion, voided: b.voided, blockNumber: b.blockNumber };
     } catch (error) {
-      rpcFail("status", "reading the finality status", error);
+      const e = classify(error);
+      if (e.kind === "revert") fail("batch", "batch-unknown", `batch ${anchor.batchId} does not exist on registry ${registry} (getBatch reverted: ${e.name})`);
+      else if (e.kind === "no-data") fail("batch", "registry-no-code", `no ReceiptRegistry at ${registry} on chain ${file.chainId} (getBatch returned no data)`);
+      else rpcFail("batch", `getBatch(${anchor.batchId})`, error);
+      return;
+    }
+    if (/^0x0+$/.test(batch.root) && batch.blockNumber === 0n) {
+      fail("batch", "batch-unknown", `batch ${anchor.batchId} does not exist on registry ${registry}`);
+      return;
+    }
+    if (batch.voided) {
+      fail("batch", "batch-voided", `batch ${anchor.batchId} was voided by the registry owner; its receipts no longer verify`);
+      status = { stage: "voided", estimated: false, checkedAt: Math.floor(Date.now() / 1000), notes: [`batch ${anchor.batchId} voided`] };
+    }
+    if (batch.root !== anchor.root) {
+      fail("batch", "batch-root-mismatch", `batch ${anchor.batchId}'s on-chain root is ${batch.root}, but the receipt's anchor says ${anchor.root}`);
+    }
+    if (batch.schemaVersion !== receipt.schemaVersion) {
+      fail("batch", "batch-schema-mismatch", `batch ${anchor.batchId} holds schemaVersion ${batch.schemaVersion} receipts, but this receipt is schemaVersion ${receipt.schemaVersion}`);
+    }
+    if (anchor.mode === "direct" && batch.count !== 1) {
+      fail("batch", "batch-count-mismatch", `anchor says mode "direct" (a batch of one), but batch ${anchor.batchId} holds ${batch.count} receipts`);
+    }
+    pass("batch");
+
+    // on-chain proof
+    try {
+      const ok = await client.readContract({
+        address: registry,
+        abi: receiptRegistryAbi,
+        functionName: "verifyReceipt",
+        args: [batchId, receipt, anchor.proof],
+      });
+      if (ok) pass("onchainProof");
+      else if (batch.voided) fail("onchainProof", "proof-onchain-false", `registry.verifyReceipt returned false: batch ${anchor.batchId} is voided`);
+      else fail("onchainProof", "proof-onchain-false", `registry.verifyReceipt returned false: proof does not verify against batch ${anchor.batchId}'s root ${batch.root}`);
+    } catch (error) {
+      const e = classify(error);
+      if (e.kind === "rpc") rpcFail("onchainProof", "verifyReceipt", error);
+      else fail("onchainProof", "proof-onchain-false", `registry.verifyReceipt(${anchor.batchId}) failed: ${e.kind === "revert" ? (e.name ?? e.message) : e.message}`);
+    }
+
+    // the anchoring transaction, found from the chain rather than trusted from the file
+    let anchorBlockHash: Hex | undefined;
+    try {
+      const logs = await client.getContractEvents({
+        address: registry,
+        abi: receiptRegistryAbi,
+        eventName: "BatchAttested",
+        args: { batchId },
+        fromBlock: batch.blockNumber,
+        toBlock: batch.blockNumber,
+        strict: true,
+      });
+      const log = logs.find((l) => l.args.batchId === batchId);
+      if (!log) {
+        fail("anchorTx", "anchor-tx-missing", `no BatchAttested(${anchor.batchId}) log from registry ${registry} in block ${batch.blockNumber}, where the registry says the batch was recorded`);
+      } else {
+        batchTx = lower(log.transactionHash);
+        anchorBlockHash = log.blockHash;
+        if (batchTx !== anchor.txHash) {
+          fail("anchorTx", "anchor-tx-mismatch", `batch ${anchor.batchId} was anchored by tx ${batchTx}, but the receipt's anchor says tx ${anchor.txHash}`);
+        }
+        if (Number(batch.blockNumber) !== anchor.blockNumber) {
+          fail("anchorTx", "anchor-block-mismatch", `batch ${anchor.batchId} was anchored in block ${batch.blockNumber}, but the receipt's anchor says block ${anchor.blockNumber}`);
+        }
+        if (lower(log.args.root) !== batch.root) {
+          fail("anchorTx", "anchor-log-mismatch", `BatchAttested(${anchor.batchId}) log carries root ${log.args.root}, but getBatch says ${batch.root}`);
+        }
+        const txReceipt = await client.getTransactionReceipt({ hash: log.transactionHash });
+        if (txReceipt.status !== "success") fail("anchorTx", "anchor-tx-failed", `anchoring tx ${batchTx} did not succeed (status ${txReceipt.status})`);
+        pass("anchorTx");
+      }
+    } catch (error) {
+      rpcFail("anchorTx", "reading the anchoring transaction", error);
+    }
+
+    // status: only for a receipt the chain actually includes
+    if (!batch.voided && checks.batch === "pass" && checks.onchainProof === "pass") {
+      try {
+        status = await resolveStatus({
+          client,
+          blockNumber: batch.blockNumber,
+          confirmations: options.confirmations,
+          finality: options.finality ?? defaultFinalityReader(file.chainId),
+          anchorBlockHash,
+        });
+        // resolveStatus answers `pending` here only when the block at the anchor's height no longer
+        // has the hash the BatchAttested log was read from: the chain changed between two reads
+        // (a reorg in progress, or RPCs behind a load balancer disagreeing). The checks above passed
+        // against a view that is gone, so the receipt is not verified; it may be again once settled.
+        if (status.stage === "pending") {
+          incomplete = true;
+          fail("status", "anchor-reorged", `${status.notes?.[0] ?? `block ${batch.blockNumber} no longer carries the anchor`}; the chain changed while verifying, so this result does not stand: verify again once the reorg settles`);
+        } else pass("status");
+      } catch (error) {
+        rpcFail("status", "reading the finality status", error);
+      }
     }
   }
+
+  // What the run says it spent, compared with the receipt's own chain. Only a payment can be
+  // checked this way: tool calls, the model, the prompt and the output stay what the signer says.
+  async function checkSpend(m: ManifestV1): Promise<void> {
+    const reads = new Map<string, Promise<SpendTx>>();
+    const txs = new Set<Hex>();
+    const roles: Record<string, "agent" | "principal"> = { [receipt.principal]: "principal", [receipt.agent]: "agent" };
+    let compared = false;
+    for (const [index, item] of m.spend.entries()) {
+      const txHash = item.txHash ?? null;
+      const entry = (outcome: SpendOutcome, detail: string, extra: Partial<SpendCheck> = {}): SpendCheck => {
+        const check: SpendCheck = { index, asset: item.asset, amount: item.amount, txHash, outcome, ...extra, detail };
+        spend.push(check);
+        if (outcome === "confirmed" || outcome === "unattributed" || outcome === "contradicted") compared = true;
+        return check;
+      };
+      if (!txHash) {
+        entry("unchecked", "no transaction named");
+        continue;
+      }
+      const caip = CAIP19_EVM.exec(item.asset);
+      if (!caip) {
+        entry("unchecked", `asset ${JSON.stringify(item.asset)} is not a CAIP-19 token or native ETH on an EVM chain, so there is nothing on chain to compare`);
+        continue;
+      }
+      if (Number(caip[1]) !== file.chainId) {
+        entry("unchecked", `the asset is on chain ${caip[1]}; only the receipt's own chain ${file.chainId} is read`);
+        continue;
+      }
+      if (!WHOLE.test(item.amount)) {
+        entry("unchecked", `amount ${item.amount} is not a whole number of base units`);
+        continue;
+      }
+      const token = caip[2] ? lower(caip[2] as Address) : null;
+      if (!txs.has(txHash) && txs.size >= MAX_SPEND_TXS) {
+        entry("unchecked", `the manifest names more than ${MAX_SPEND_TXS} spend transactions; only the first ${MAX_SPEND_TXS} are read`);
+        continue;
+      }
+      txs.add(txHash);
+      const key = `${txHash}:${token === null}`;
+      if (!reads.has(key)) reads.set(key, readSpendTx(client, txHash, token === null));
+      const tx = await reads.get(key)!;
+      const amount = BigInt(item.amount);
+      const where = `spend[${index}]`;
+
+      if (tx.kind === "error") {
+        entry("undetermined", "the RPC did not answer");
+        rpcFail("spend", `${where}: reading transaction ${txHash}`, tx.error);
+        continue;
+      }
+      if (tx.kind === "pending") {
+        incomplete = true;
+        const e = entry("undetermined", `transaction ${txHash} is not mined yet`);
+        fail("spend", "spend-tx-pending", `${where}: ${e.detail}; check again once it is`);
+        continue;
+      }
+      if (tx.kind === "missing") {
+        const e = entry("contradicted", `there is no transaction ${txHash} on chain ${file.chainId}`);
+        fail("spend", "spend-tx-missing", `${where}: ${e.detail}`);
+        continue;
+      }
+      const at = { blockNumber: tx.blockNumber };
+      if (!tx.success) {
+        const e = entry("contradicted", `transaction ${txHash} reverted, so it moved nothing`, at);
+        fail("spend", "spend-tx-failed", `${where}: ${e.detail}`);
+        continue;
+      }
+
+      // The payments the transaction made in this asset: Transfer logs from the token, or the
+      // transaction's own ETH value.
+      const paid: { from: Address; value: bigint }[] = token
+        ? parseEventLogs({ abi: erc20Abi, eventName: "Transfer", logs: tx.logs })
+            .filter((l) => sameAddress(l.address, token))
+            .map((l) => ({ from: lower(l.args.from), value: l.args.value }))
+        : [{ from: tx.from, value: tx.value ?? 0n }];
+      const exact = paid.filter((p) => p.value === amount);
+      const own = exact.find((p) => roles[p.from]);
+      const what = token ? `${item.amount} of token ${token}` : `${item.amount} wei`;
+      if (own) {
+        entry("confirmed", `transaction ${txHash} moved ${what} from the ${roles[own.from]} ${own.from}`, { ...at, payer: own.from });
+      } else if (exact.length) {
+        entry("unattributed", `transaction ${txHash} moved ${what}, but from ${exact[0]!.from}, which is neither the agent nor the principal`, { ...at, payer: exact[0]!.from });
+      } else if (!token) {
+        // Native ETH sent by a contract (a smart wallet, a router) leaves no trace in the receipt.
+        entry("unchecked", `transaction ${txHash} carries ${tx.value ?? 0n} wei itself; ETH moved inside a contract call cannot be seen without a trace`, at);
+      } else {
+        const moved = paid.length ? `it moved ${[...new Set(paid.map((p) => p.value.toString()))].slice(0, 5).join(", ")} of it` : "it has no transfer of that token";
+        const e = entry("contradicted", `transaction ${txHash} moved no ${what} (${moved})`, at);
+        fail("spend", "spend-transfer-missing", `${where}: ${e.detail}`);
+      }
+    }
+    if (compared) pass("spend");
+  }
+
+  if (anchor !== null && chainOk) await checkAnchor(anchor);
+  if (chainOk && checkedManifest) await checkSpend(checkedManifest);
   return finish();
 }

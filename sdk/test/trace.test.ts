@@ -49,7 +49,11 @@ describe("parseTraceJsonl: examples/trace.jsonl", () => {
     assert.equal(m.toolCalls[0]!.argsHash, contentHash(events[1].args));
     assert.equal(m.toolCalls[0]!.resultHash, contentHash(events[1].result));
     assert.equal(m.toolCalls[2]!.resultHash, events[4].resultHash);
-    assert.equal(m.spend[0]!.txHash, events[3].txHash);
+    // The example names no transaction: a made-up hash would fail verify's spend check.
+    assert.equal(m.spend[0]!.txHash, undefined);
+    const tx = `0x${"ab".repeat(32)}`;
+    const withTx = parseTraceJsonl(example.replace('"amount":"1000"}', `"amount":"1000","txHash":"${tx}"}`), { runId: RUN_ID });
+    assert.equal(withTx.spend[0]!.txHash, tx, "a spend line's txHash is kept");
   });
 
   test("deterministic for a fixed runId; random runId otherwise", () => {
