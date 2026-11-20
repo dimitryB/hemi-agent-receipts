@@ -1,9 +1,9 @@
--- Permit2 reads its nonce as a number, so "042" and "42" are one authorization; claims written
--- before nonces were normalized keep the string as sent (payments.ts canonicalNonce). Each
--- permit2 key whose nonce is decimal is rewritten without leading zeros. Where two claims
--- become one key, the claim written first keeps it. A key SQL cannot normalize (a nonce in
--- hex) is left as it is: the service looks claims up by the canonical key, so it is never
--- matched, and the first run id to claim the canonical key owns the authorization.
+-- Permit2 reads its nonce as a number, so "042" and "42" are one authorization. The service keys
+-- claims by the canonical nonce (payments.ts canonicalNonce), so each permit2 key whose nonce is
+-- decimal is rewritten without leading zeros. Where two claims become one key, the claim written
+-- first keeps it. A key SQL cannot normalize (a nonce in hex) is left as it is: the service looks
+-- claims up by the canonical key, so it is never matched, and the first run id to claim the
+-- canonical key owns the authorization.
 -- Key layout: 'permit2:' (8) + asset (42) + ':' + payer (42) + ':' + nonce, from position 95.
 CREATE TABLE payment_claims_canonical (
   payment_key TEXT PRIMARY KEY,

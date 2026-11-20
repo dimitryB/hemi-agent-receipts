@@ -3,7 +3,7 @@ import type { AddressInfo } from "node:net";
 
 /**
  * A JSON-RPC proxy that injects the failures Hemi's RPCs are expected to produce
- * (docs/DECISIONS.md: June 2026 outage, node rewrite, ~300 req/min public limit).
+ * (outages such as the one in June 2026, docs/RUNBOOK.md; the public RPC allows about 300 requests a minute).
  *
  * Modes:
  *  - http503 / http429 / http502: answer with that status and no JSON-RPC body

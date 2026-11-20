@@ -47,12 +47,12 @@ export function duration(seconds: number): string {
   return mm ? `${h} h ${mm} min` : `${h} h`;
 }
 
-/** "3 minutes ago", for a reviewer reading the page now. */
 /** "a", "a and b", "a, b and c". */
 export function listWords(items: readonly string[]): string {
   return items.length <= 1 ? (items[0] ?? "") : `${items.slice(0, -1).join(", ")} and ${items.at(-1)}`;
 }
 
+/** "3 minutes ago", for a reviewer reading the page now. */
 export function ago(unixSeconds: number, now = Math.floor(Date.now() / 1000)): string {
   const d = now - unixSeconds;
   if (d < 0) return "in the future";

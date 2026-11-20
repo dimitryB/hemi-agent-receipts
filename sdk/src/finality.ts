@@ -557,7 +557,7 @@ export const DEFAULT_FINALITY_OPTIONS: Record<number, PopFinalityOptions> = {
     minerAddresses: KNOWN_POP_MINERS_MAINNET,
     scanMaxBlocks: 36,
   },
-  // Testnet has had no PoP activity for months (report §3.5): no miners, no scanning; the
+  // Testnet showed no PoP activity when checked on 2026-10-29 (report §3.5): no miners, no scanning; the
   // liveness gate answers "unavailable" from at most 18 Hemi RPC calls (cached 5 min) and never touches Esplora.
   [HEMI_TESTNET.chainId]: {
     esploraUrls: ["https://blockstream.info/testnet/api"],

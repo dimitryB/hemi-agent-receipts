@@ -1,6 +1,6 @@
 # Security audit of the contracts
 
-Date: 2026-11-09. Scope: the contracts in this repository, which have not changed since. Reviewer: Claude (Fable 5.1), an AI model, on request. This is a careful internal review, not an independent third-party audit, and it should not be presented as one.
+Date: 2026-11-09. Scope: the three contract files below, which are unchanged in this repository from the reviewed version; the mainnet registry deployed on 2026-11-13 is the same build (DECISIONS.md D-14). The test-only token `contracts/contracts/mocks/ERC20Mock.sol` (D-17) is outside the review. Reviewer: Claude (Fable 5.1), an AI model, on request. This is a careful internal review, not an independent third-party audit, and it should not be presented as one.
 
 ## Scope
 
@@ -29,6 +29,8 @@ No way was found for anyone to anchor, void or alter a record without the key th
 
 Nothing rated Critical, High or Medium. Two Low findings concern recovery after a mistaken void and the reach of the owner key. The rest is informational: design choices that are sound but whose consequences deserve a sentence in the runbook or in the verifier's output.
 
+No finding is open. None needed a contract change: each is documented, mitigated in operations or fixed in the service, as its **Status** line says. The changes behind those statuses were made on 2026-11-09.
+
 ## Findings
 
 ### L-1. A void cannot be undone, and recovery needs a different leaf set
@@ -40,13 +42,17 @@ Nothing rated Critical, High or Medium. Two Low findings concern recovery after 
 
 No code change is recommended. An `unvoid` would weaken the one guarantee a void gives. Recommendation: say in RUNBOOK §6 that a re-anchor after a void must use a leaf set that differs from the voided one, and that a direct receipt comes back only inside a multi-leaf batch with a fresh receipt file.
 
+**Status: accepted, documented.** RUNBOOK §6 says that a re-anchor after a void must use a grouping that differs from the voided one, and has a row for a batch voided by mistake: a direct receipt comes back only inside a multi-leaf batch, with a fresh receipt file, because `batchIdOfRun` keeps naming the voided batch.
+
 ### L-2. The owner key is the one unrecoverable key
 
 A compromised or mistaken owner can void every batch and pause both writes. Voids are permanent (L-1), so an owner-key compromise is a permanent loss of verifiability for every receipt anchored so far, with no on-chain limit (no timelock, no second approver, no cap on voids). Pausing and signer rotation are reversible; voiding is not.
 
 The contract already does what it can: `Ownable2Step`, no renounce, owner never equal to the signer, and `voidBatch` needs the exact root. RUNBOOK §1 and §5 call for a hardware wallet or multisig on mainnet. On testnet the owner (`0xD572…21e0`) is an EOA (no code), which is fine for testnet.
 
-Recommendation: make the multisig a verified step of the mainnet go-live in RUNBOOK §5 (read `cast code <owner>` back and expect a non-empty result), since this is the only key whose compromise cannot be rotated away from. A timelock on `voidBatch` is not recommended: voiding is the incident response and must be fast.
+Recommendation: make the multisig a verified step of the mainnet go-live in RUNBOOK §5 (read `cast code <owner>` back and expect a non-empty result), because this is the only key whose compromise cannot be rotated away from. A timelock on `voidBatch` is not recommended: voiding is the incident response and must be fast.
+
+**Status: accepted, mitigated in operations.** RUNBOOK §5 reads `cast code` back for the owner (must have code: a multisig) and the service signer (must not) before go-live, and §1 states why: the owner's voids are permanent and it cannot be rotated away from. The mainnet owner is a 1-of-1 Safe (DECISIONS.md D-14).
 
 ### I-1. A principal can anchor a receipt naming any agent, and the chain does not record who signed
 
@@ -54,21 +60,31 @@ Recommendation: make the multisig a verified step of the mainnet go-live in RUNB
 
 This is the intended semantics (a principal vouching for its agent's run), not a bug. Recommendation: treat `ReceiptAttested.agent` as "the named agent", never as "the signer", in the viewer, any indexer and any reputation use; show the signer's role prominently. If the contract is ever redeployed, consider adding the recovered signer to `ReceiptAttested`.
 
+**Status: accepted, documented.** SCHEMA §5 and the contracts README state that the chain does not record who signed and that `agent` is the named agent. The viewer's verdict and "Signed by" row, and `receipts verify`, say "not by the agent" when the principal signed. The event is unchanged; adding the signer would need a redeploy.
+
 ### I-2. `setServiceSigner` accepts an address that has code
 
 The service signature is checked with ECDSA only, so a signer with code can never authorize a write (probe P4). The owner would notice at the first failed anchor and rotate again; nothing is lost. A `code.length == 0` check would also exclude EIP-7702-delegated EOAs, so it is not clearly better. Recommendation: none beyond a line in RUNBOOK §6 that the service signer must be a plain EOA.
+
+**Status: accepted, documented.** RUNBOOK §1 says the service signer must be a plain EOA, and §5 checks before go-live that it has no code.
 
 ### I-3. The batch path trusts the service, as documented
 
 On `attestBatch` the contract sees a root and a count. It cannot check that `count` is true, that every leaf carries a valid agent signature, that a run id is not in two batches, or that the schema version matches the receipts. The same receipt can be anchored in a batch and directly, since the direct path only checks whether the leaf was used as a root. A compromised service key can anchor arbitrary roots until the owner rotates it; the incident path in RUNBOOK §6 (pause, rotate, void by root, unpause) works and `BatchAttested` names the signer so bad batches can be listed. All of this is stated in the contract's NatSpec and SCHEMA §5. No change recommended.
 
+**Status: accepted by design.**
+
 ### I-4. Off-chain and on-chain disagree on accounts that have code
 
 The contract checks an account with code only through EIP-1271, never ECDSA. The service's `verifyAgentSignature` (`service/src/input.ts`) and the SDK's `verify` try ECDSA first, regardless of code. For an EIP-7702-delegated EOA this means the service could countersign a direct-path receipt that the chain then rejects with `InvalidAgentSignature`. The key did sign, so nothing false is accepted; it is a liveness difference on the direct path only, and it needs 7702 on Hemi to matter. Recommendation: have the service skip ECDSA when the candidate has code, mirroring the contract.
 
+**Status: fixed in the service.** The service accepts an ECDSA match only from an account without code; an account with code is checked through EIP-1271, as the contract does (`service/src/input.ts`, `CodeCache`). Code lookups are cached for ten minutes and share the existing rate limit. When the limit is spent or the RPC does not answer, an ECDSA match is accepted, so a failed lookup never turns away a signature the key made. A test in `service/test/attest-idempotency.test.ts` gives fresh EOAs code with `anvil_setCode`. The SDK's `verify` keeps trying ECDSA first: off chain, a match shows the key signed.
+
 ### I-5. Agent signatures never expire and EOAs cannot revoke them
 
 The `Receipt` struct has no nonce or deadline; replay is prevented by root and run-id uniqueness. An agent that has signed a receipt has no on-chain way to stop the service from anchoring it later. Stated in SCHEMA §4. Consistent with the design, where the agent wants the anchor.
+
+**Status: accepted by design.**
 
 ### I-6. Static analysis
 
@@ -83,6 +99,8 @@ Slither reported 7 results, all informational and all expected:
 | low-level-calls | `staticcall` in the vendored OZ code | Identical to OpenZeppelin |
 
 No detector fired for reentrancy, arbitrary calls, delegatecall, selfdestruct, `tx.origin`, uninitialized storage or unchecked arithmetic. The project code contains no assembly.
+
+**Status: no action needed.**
 
 ## Checked and found sound
 
@@ -118,13 +136,3 @@ slither contracts/ReceiptRegistry.sol --solc <solc-0.8.28> \
   --solc-remaps "@openzeppelin/contracts/=<repo>/node_modules/@openzeppelin/contracts/" \
   --solc-args "--evm-version paris" --exclude-dependencies --filter-paths node_modules
 ```
-
-## Follow-ups, applied 2026-11-09
-
-All five were applied the same day, none of them in the contract:
-
-1. **L-1.** RUNBOOK §6 now says that a re-anchor after a void must use a grouping that differs from the voided one, and has a row for a batch voided by mistake: a direct receipt comes back only inside a multi-leaf batch, with a fresh receipt file, since `batchIdOfRun` keeps naming the voided batch.
-2. **L-2.** RUNBOOK §5 reads `cast code` back for the owner (must have code: a multisig) and the service signer (must not) before go-live, and §1 states why: the owner's voids are permanent and it cannot be rotated away from.
-3. **I-1.** SCHEMA §5 and the contracts README state that the chain does not record who signed and that `agent` is the named agent. The viewer's verdict and "Signed by" row, and `receipts verify`, now say "not by the agent" when the principal signed.
-4. **I-4.** The service accepts an ECDSA match only from an account without code; an account with code is checked through EIP-1271, as the contract does (`service/src/input.ts`, `CodeCache`). Code lookups are cached for ten minutes and share the existing rate limit; when the limit is spent or the RPC does not answer, an ECDSA match is accepted as before, so no request that succeeded before fails now. Covered by a new test in `service/test/attest-idempotency.test.ts` that gives fresh EOAs code with `anvil_setCode`.
-5. **I-2.** RUNBOOK §1 and §5: the service signer must be a plain EOA.

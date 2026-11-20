@@ -5,7 +5,7 @@ import { isBytes32, isLowerAddress, lowerAddress, lowerBytes32, ZERO_ADDRESS, ZE
 /**
  * Manifest schema v1. docs/SCHEMA.md is the human-readable source of truth; the field
  * tables there are checked against MANIFEST_V1_FIELDS by sdk/test/schema-doc.test.ts.
- * v1 is frozen once deployed to mainnet: any change bumps receiptVersion.
+ * v1 is frozen (the registry is deployed on mainnet): any change bumps receiptVersion.
  */
 export const RECEIPT_VERSION = 1 as const;
 
@@ -83,7 +83,6 @@ export const SPEND_V1_FIELDS = [
   { name: "txHash", type: "bytes32", required: false },
 ] as const satisfies readonly FieldSpec[];
 
-/** Limits from docs/SCHEMA.md. */
 /**
  * Compile-time guard: the field lists above name exactly the keys of the TypeScript types, and
  * mark exactly the optional ones as not required. `npm run typecheck -w sdk` fails on any drift;
@@ -103,6 +102,7 @@ export type FieldListsMatchTypes = [
   Assert<Same<Optional<typeof SPEND_V1_FIELDS>, OptionalKeys<SpendV1>>>,
 ];
 
+/** Limits from docs/SCHEMA.md. */
 export const LIMITS = {
   modelLength: 256,
   toolCalls: 10_000,

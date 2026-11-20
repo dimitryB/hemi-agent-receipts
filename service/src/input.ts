@@ -267,8 +267,8 @@ export class CodeCache {
  * RPC budget the batcher needs, and which accounts have code is cached.
  *
  * An ECDSA match whose account cannot be looked up right now (rate limited, or the RPC does not
- * answer) is accepted, as every ECDSA match was before the code check existed: the key did
- * sign, and at worst a direct-path transaction for an EIP-7702 account fails on chain.
+ * answer) is accepted: the key did sign, and at worst a direct-path transaction for an
+ * EIP-7702 account fails on chain.
  */
 export async function verifyAgentSignature(
   ctx: ChainContext,

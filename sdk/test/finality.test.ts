@@ -94,9 +94,9 @@ describe("publication selection rules", () => {
 
   test("a forged low keystone in the mempool does not end the miner-history search early", async () => {
     // Anyone can put a transaction into a miner's address history (dust to the address with a
-    // "HEMI" OP_RETURN), and a mempool entry costs nothing. One naming an old keystone used to
-    // end pagination on the first page, so the genuine publication on the next page was never
-    // read and a newer descendant's publication (5 confirmations) was reported instead (11).
+    // "HEMI" OP_RETURN), and a mempool entry costs nothing. One naming an old keystone must not
+    // end pagination on the first page: the genuine publication on the next page (11
+    // confirmations) must be read, not only a newer descendant's publication (5).
     const forgedAbrev = `0x${"00".repeat(5)}${(5_000_000).toString(16).padStart(8, "0")}${"00".repeat(76 - 9)}` as Hex;
     const forged = popOpReturnScript(forgedAbrev).slice(2);
     const s250 = await canonicalScript(5_620_250);

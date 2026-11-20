@@ -15,8 +15,8 @@ Third-party services the project reads from, such as Hemi's RPC, the Bitcoin Esp
 
 ## Known dependency advisories
 
-Advisories that `npm audit` reports and that cannot be fixed yet are listed, with why they do not reach the published packages, under **Known limits** in the [README](README.md#known-limits).
+Advisories that `npm audit` reports and that cannot be fixed yet are listed, with why they do not reach the SDK, the CLI or the service at run time, under **Known limits** in the [README](README.md#known-limits).
 
 ## Status of review
 
-The contracts had an internal review, recorded in [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md). It is not an independent third-party audit.
+The contracts' internal review is recorded in [docs/SECURITY-AUDIT.md](docs/SECURITY-AUDIT.md). It is not an independent third-party audit.

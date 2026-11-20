@@ -3,7 +3,7 @@
 Build, sign, submit and verify Bitcoin-anchored receipts for AI agent runs on Hemi.
 `docs/SCHEMA.md` defines every byte that is hashed or signed; this package implements it.
 
-**Not on npm.** This package has not been published to the npm registry. Do not run `npm install @hemi-receipts/sdk`: it finds nothing today, and would install someone else's code if anyone ever registers the name. Build it from this repository and install the tarball instead:
+**Not on npm.** This package is not published to the npm registry. Do not run `npm install @hemi-receipts/sdk`: it finds nothing, and would install someone else's code if anyone registers the name. Build it from this repository and install the tarball instead:
 
 ```bash
 npm ci && npm run build -w sdk     # in a clone of this repository

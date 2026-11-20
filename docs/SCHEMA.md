@@ -2,7 +2,7 @@
 
 This file defines every byte that is hashed, signed or anchored. The SDK implements it in `sdk/src/` and `sdk/test/schema-doc.test.ts` checks the field tables and the pinned fixture digest in this file against the SDK, so the two cannot drift.
 
-**Freeze rule.** v1 is frozen once a ReceiptRegistry is deployed to Hemi mainnet. Any change to a field, a rule, the canonicalization or the hash bumps `receiptVersion` and gets a new section here. The registry keeps accepting old versions until the owner disables them (`setSchemaVersionEnabled`).
+**Freeze rule.** v1 is frozen: a ReceiptRegistry is deployed on Hemi mainnet (2026-11-13, `docs/DECISIONS.md` D-14). Any change to a field, a rule, the canonicalization or the hash bumps `receiptVersion` and gets a new section here. The registry keeps accepting old versions until the owner disables them (`setSchemaVersionEnabled`).
 
 ## 1. Manifest
 
@@ -84,7 +84,7 @@ JCS is RFC 8785, the JSON Canonicalization Scheme: members sorted by name compar
 
 ### 1.4 Fixture and pinned digest
 
-`examples/manifests/fixture-v1.json` is this manifest. `sdk/test/schema-doc.test.ts` reads the JSON block below, validates it, and checks that it hashes to the pinned digest below. The digest was also reproduced independently with Python's `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)` piped to `cast keccak`, which matches JCS for this fixture.
+`examples/manifests/fixture-v1.json` is this manifest. `sdk/test/schema-doc.test.ts` reads the JSON block below, validates it, and checks that it hashes to the pinned digest below. Python's `json.dumps(sort_keys=True, separators=(",", ":"), ensure_ascii=False)` piped to `cast keccak` reproduces the digest independently; that serialization matches JCS for this fixture.
 
 <!-- fixture-v1:start -->
 ```json

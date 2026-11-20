@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Serializes npm installs when several agents share this checkout:
+# Serializes npm installs when several processes share this checkout:
 #   scripts/with-npm-lock.sh npm install <pkg>@<exact-version> -w <workspace> --no-audit --no-fund
 set -euo pipefail
 cd "$(dirname "$0")/.."

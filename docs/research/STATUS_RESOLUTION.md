@@ -5,6 +5,9 @@ machine with the command shown. Times are unix seconds unless noted. The scripts
 [`status_resolution_scripts/`](status_resolution_scripts/). They are research probes, not production code.
 They use only the Python stdlib and Node 22+ built-ins.
 
+The SDK's reader follows this research. Where it makes a different choice (the PoP liveness window, the
+`hemi-confirmed` block floor), [DECISIONS.md D-4](../DECISIONS.md) records the choice in use and why.
+
 Stages: `pending` → `hemi-included` → `hemi-confirmed` → `btc-published` → `btc-final`.
 
 ---
@@ -21,8 +24,8 @@ Hemi-operated candidate is missing, private, or broken (§6). You can still reso
 
 This works on **mainnet**, checked end to end against Hemi's own BFG data and hVM.
 
-**Testnet has had no PoP activity** for at least many months. The two Bitcoin stages can never be
-reached there today.
+**Testnet has had no PoP activity** for many months (§3.5). The two Bitcoin stages cannot be reached
+there.
 
 | Stage | Recommended read method | Status | Cost per status refresh |
 |---|---|---|---|
@@ -31,7 +34,7 @@ reached there today.
 | `btc-published` | Covering keystone `K = ceil(B/25)*25`. Build its canonical 76-byte abbreviated keystone from 2 Hemi RPC calls (§3.2). Look for a Bitcoin tx whose `OP_RETURN` is `6a4c50` + `"HEMI"` + abrev, for `K` **or any later keystone** (a later keystone anchors its ancestors). The effective publication height is the lowest such Bitcoin height. Find PoP txs either by polling known PoP-miner addresses on Esplora (cheap) or by scanning each new Bitcoin block (robust, needed to discover new miners) (§3.3). | VERIFIED on mainnet. Testnet: UNAVAILABLE (no PoP txs in 300+ recent testnet3 blocks or 30 testnet4 blocks; no PoP payouts in testnet blocks sampled since block 4,000,000) | 2 Hemi RPC calls once per keystone (cache them) + 1 Esplora call per poll (address mode), or 2 Esplora calls per new BTC block (~1.6 MB each) in indexer mode |
 | `btc-final` | `confirmations = btcTip − pubHeight + 1 ≥ 9`. Get the tip from Esplora `/blocks/tip/height`, or call the hVM precompile directly: `eth_call` to `0x…43` with the PoP txid returns the confirmation count (§3.4). | VERIFIED on mainnet (the hVM `0x43` result matched the Esplora count, 5 and then 6). The `0x43` call also works on testnet for any testnet3 tx. | 1 call (Esplora or Hemi RPC) |
 
-Hemi-operated finality sources checked (details in §6). None is usable today:
+Hemi-operated finality sources checked (details in §6). None is usable:
 
 - **op-node `optimism_btcFinalityByBlockHash`** at `https://rpc.hemi.network/noderpc`.
   - Mainnet: needs an undocumented 2nd parameter, which it uses as the base URL of a BFG v2.
@@ -54,8 +57,8 @@ Key measured numbers:
   - Effective `btc-published` delay after the keystone block: p50 15 min, p90 2.5 h, max 6.0 h.
   - Effective `btc-final` (9 confirmations) delay: p50 1.7 h, p90 4.2 h, p99 7.1 h, max 7.8 h.
   - 15% of keystones were never published themselves and inherit from a later keystone.
-- **Mainnet PoP is intermittent.** Only **22 of 120** daily samples over the last 120 days had a PoP
-  payout. Long gaps with no PoP at all are normal, so `btc-final` has **no upper time bound**.
+- **Mainnet PoP is intermittent.** Only **22 of 120** daily samples over the 120 days before the research
+  date had a PoP payout. Long gaps with no PoP at all are normal, so `btc-final` has **no upper time bound**.
 
 ---
 
@@ -235,7 +238,7 @@ publish a "HEMI" OP_RETURN, including for a non-canonical fork.
 
 **Mode A: poll PoP-miner addresses.** This is cheap. One call returns the address's mempool txs
 (blockstream.info: up to 50) plus its newest confirmed txs (25 on blockstream.info; mempool.space returned 30
-in our run). A miner that is keeping up publishes one tx per keystone, so this covers
+in the sample). A miner that is keeping up publishes one tx per keystone, so this covers
 about the last 2 h. Page further back with `/address/{a}/txs/chain/{last_seen_txid}`.
 
 ```text
@@ -252,7 +255,7 @@ The `l2_block_number` is decoded directly from the OP_RETURN (`script[12:16]` as
 abrev bytes `[5:9]`). In the sample, the 20 mempool txs carried keystones 5620250…5620725 and the
 confirmed txs carried 5620225 and earlier.
 
-Miner identities **rotate**:
+Miner identities **rotate**. Counted back from the research date:
 
 | When | Payout recipient |
 |---|---|
@@ -349,7 +352,7 @@ Testnet PoP evidence:
 - No `HEMI` OP_RETURN of any kind appeared in testnet3 5223089…5223188 or in the last 30 testnet4 blocks.
 - Testnet keystone blocks 4,000,000 … 7,100,500 (11 samples) contained **no** PoP payout tx. Block
   3,000,000 did.
-- The old testnet BFG URL now says
+- The old testnet BFG URL says
   `"Testnet BFG endpoint has moved … PoP Mining on testnet is no longer incentivised"`.
 
 ### 3.6 Hemi-RPC-only liveness signal: PoP payout txs
@@ -421,6 +424,10 @@ if live:
   P(btc-final     by t_K + 102 min) ≈ 0.50, +143 min ≈ 0.75, +253 min ≈ 0.90, +323 min ≈ 0.95, +428 min ≈ 0.99
 ```
 
+The SDK's gate is wider: a payout in the keystone blocks of the last 6 hours, reading every 4th one. Six
+keystone blocks (30 minutes) call mainnet dead while it is publishing, because payouts pause for longer
+than that between bursts (DECISIONS.md D-4 has the measurement).
+
 Uncertainty:
 
 - The sample is one 70 h window with a single active miner.
@@ -455,6 +462,8 @@ Bitcoin references in `op-node/rollup/finality/`), so **`finalized` has no Bitco
 applies to every tracked tx.
 
 - If a fixed count is required, use **N = 30 blocks (6 min)**. The largest safe lag observed was 22.
+  The SDK requires both: the block at or below `safe`, and a floor of 10 blocks on top by default
+  (`HEMI_CONFIRMATIONS` in the service; DECISIONS.md D-4).
 - Reorgs were not measured. In theory, unsafe blocks can only reorg if the single sequencer's output is
   not what derivation from Ethereum produces. Safe blocks can only reorg if Ethereum reorgs. Finalized
   blocks are irreversible.
@@ -485,8 +494,8 @@ It then fetches `<url>/v2/keystonefinality/<abrev hash>` and returns bfgd v2's
 `L2KeystoneBitcoinFinalityResponse`. That response shape is
 `{l2_keystone, block_hash, block_height, effective_confirmations, super_finality}`.
 
-- In source at `hemilabs/optimism@086fd45e2`, the URL is node config (`n.bfgURL`). The current `hemi`
-  HEAD (`f04d7b3`) no longer has these methods. The deployed binary is untagged.
+- In source at `hemilabs/optimism@086fd45e2`, the URL is node config (`n.bfgURL`). The `hemi` branch
+  HEAD on the research date (`f04d7b3`) does not have these methods. The deployed binary is untagged.
 - No public BFG v2 URL is known, so the method is unusable.
 - **Security note for Hemi.** The public op-node makes outbound HTTP requests to a URL the caller
   chooses. We only sent `"0x1"`, which failed locally. We did not probe any internal addresses. Consider
@@ -561,7 +570,7 @@ BTC height. Testnet has no BFG:
 - **op-geth `kss_getLatestKeystones` / `kss_getKeystone` / `kss_subscribe("newKeystones")`:** `-32601` on the public HTTP and WS RPC (`/rpc`, `/wsrpc`) and on dRPC. The `rpc_modules` result has no `kss`, `debug` or `admin`.
 - **`safe` / `finalized` tags:** standard OP-stack (Ethereum L1-derived). No Bitcoin meaning.
 - **Hemi Portal (`hemilabs/ui-monorepo`):** no BFG or finality calls. The `portal-backend` "latest-keystone" field is just `eth_blockNumber`.
-- **hemi-node compose (`hemilabs/hemi-node`):** still pins bfgd 1.6.3 with private `ws://bfgd:8080/v1/ws/private`. It documents that "Extended Consensus RPC (BTC finality)" exists only on self-hosted `full`/`hemi` profiles.
+- **hemi-node compose (`hemilabs/hemi-node`):** pins bfgd 1.6.3 with private `ws://bfgd:8080/v1/ws/private`. It documents that "Extended Consensus RPC (BTC finality)" exists only on self-hosted `full`/`hemi` profiles.
 - **Hemi docs** (`docs.hemi.xyz/llms.txt`, `llms-full.txt`): no public finality API. The only BFG URL is the PoP-miner websocket.
 - **PoPPayoutsV2** (`hemilabs/pop-payouts`, with relative publication heights): not deployed. The live payouts use the V1 selector `0x1725877d`, so there are no BTC heights on-chain.
 - **hVM:** no precompile looks up keystones. `0x40`–`0x49` cover balances, UTXOs, tx-by-txid, confirmations, headers, address→script, inputs/outputs and witness (`core/vm/contracts.go`).
@@ -593,15 +602,17 @@ went to the 120-day payout sample.
 
 ## 8. Open questions and risks
 
-1. **Is there a supported public finality API?** Ask Hemi:
+1. **Is there a supported public finality API?** Open (DECISIONS.md Q-2). Ask Hemi:
    - Whether a public bfgd v2 base URL exists to pass to `/noderpc`.
-   - Whether `optimism_btcFinalityByBlockHash` will be fixed. Its current shape breaks their own Blockscout.
+   - Whether `optimism_btcFinalityByBlockHash` will be fixed. Its shape breaks their own Blockscout.
    - Whether testnet PoP will return.
 2. **PoP liveness on mainnet.** The product must show `btc-published` as possibly days away during PoP
-   outages. Add the payout-based liveness gate (§3.6) and surface it in the UI.
+   outages. The SDK's reader gates on payouts (§3.6, with the wider window in §4), and the status says
+   "no PoP activity", with the reason, when the gate finds none.
 3. **Miner discovery.** A mode-A-only client misses new or rotated miners. Payout recipients are EVM
    addresses and cannot be mapped to Bitcoin addresses without seeing a PoP tx, so keep mode B (or
-   periodic mode-B discovery).
+   periodic mode-B discovery). On mainnet the SDK's reader does both by default: it polls known miner
+   addresses and scans up to 36 Bitcoin blocks (opt-in in the viewer, because each block is about 1.6 MB).
 4. **Trust.** Esplora (blockstream.info / mempool.space) is trusted for Bitcoin data. The hVM `0x43` result
    is trusted to the Hemi RPC operator. Cross-checking the two is cheap (1 call each), and they agreed in
    every sample. Bitcoin reorgs of the publication block are possible below 9 confirmations, so re-check

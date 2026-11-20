@@ -1,6 +1,6 @@
 # receipts (CLI)
 
-**Not on npm.** Run it from a clone of this repository: after `npm ci && npm run build` at the root, `npx receipts …` there runs this CLI (as does `node cli/dist/index.js …`). Do not install `@hemi-receipts/cli` or `@hemi-receipts/sdk` from the npm registry: neither has been published, and the CLI's own `@hemi-receipts/sdk` dependency would be looked up there too if you installed the CLI on its own.
+**Not on npm.** Run it from a clone of this repository: after `npm ci && npm run build` at the root, `npx receipts …` there runs this CLI (as does `node cli/dist/index.js …`). Do not install `@hemi-receipts/cli` or `@hemi-receipts/sdk` from the npm registry: neither is published there, and the CLI's own `@hemi-receipts/sdk` dependency would be looked up there too if you installed the CLI on its own.
 
 ```
 receipts from-trace <trace.jsonl> [--agent ADDR] [--principal ADDR] [--model NAME] [--run-id HEX] [-o manifest.json]

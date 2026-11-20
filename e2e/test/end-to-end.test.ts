@@ -1,5 +1,5 @@
 /**
- * Definition-of-done, end to end, on a local chain with a flaky RPC in front of it.
+ * The README's claims, end to end, on a local chain with a flaky RPC in front of it.
  *
  * Runs the real binaries (service/dist and cli/dist), exactly as the README tells a user to:
  *  1. three manifests attested together land in ONE BatchAttested tx and reach hemi-confirmed;
@@ -162,7 +162,7 @@ before(async () => {
   // The service's RPC drops answers after forwarding too ("was my tx sent?"); verify's does not need to.
   serviceRpc = await startFlakyRpc({ upstream: anvil.url, failureRate: 0.2, modes: [...DEFAULT_MODES, "drop-response"], stallMs: 1_500, seed: 7 });
   verifyRpc = await startFlakyRpc({ upstream: anvil.url, failureRate: 0.3, stallMs: 1_500, seed: 11 });
-  tmp = await mkdtemp(join(tmpdir(), "receipts-dod-"));
+  tmp = await mkdtemp(join(tmpdir(), "receipts-e2e-"));
   service = await startServiceProcess({
     CHAIN_ID: String(anvil.chainId),
     HEMI_RPC_URLS: serviceRpc.url,
@@ -185,7 +185,7 @@ after(async () => {
   if (tmp) await rm(tmp, { recursive: true, force: true });
 });
 
-describe("Definition of done (local chain, flaky RPC)", () => {
+describe("end to end (local chain, flaky RPC)", () => {
   test("three manifests → three receipts in ONE BatchAttested tx", async () => {
     const out = join(tmp, "receipts");
     const res = await cli(

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Definition-of-done run on live Hemi testnet:
+# The end-to-end check on live Hemi testnet:
 #   docker compose up → attest three fresh manifests → one BatchAttested tx → hemi-confirmed
 #   → stop the service → verify each receipt with only an RPC and the registry address.
 #

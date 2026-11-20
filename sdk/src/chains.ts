@@ -2,8 +2,9 @@ import { defineChain, type Address, type Chain } from "viem";
 
 /**
  * Hemi networks. RPC order matters: the first URL is tried first.
- * Testnet: dRPC is deliberately absent. On 2026-10-29 hemi-testnet.drpc.org reported head
- * 4,443,639 while the public RPC reported 7,100,459 (docs/DECISIONS.md D-6).
+ * Testnet leaves dRPC out: when checked on 2026-10-29, hemi-testnet.drpc.org reported head
+ * 4,443,639 while the public RPC reported 7,100,459, about 2.66 million blocks behind
+ * (docs/DECISIONS.md D-6).
  */
 export interface HemiNetwork {
   key: "hemi" | "hemi-testnet";

@@ -2,8 +2,9 @@ import { createPublicClient, fallback, http, type Chain, type PublicClient, type
 import { chainFor, HEMI_NETWORKS } from "./chains.js";
 
 /**
- * Hemi RPCs are expected to be flaky (June 2026 outage, node rewrite in progress) and the
- * public RPC allows about 300 requests a minute. Every chain read in the SDK, CLI and
+ * Hemi RPCs can be flaky (an outage in June 2026 during a node rewrite; testnet mined no
+ * ordinary transactions from 2026-11-04 to 2026-11-05) and the public RPC allows about 300
+ * requests a minute. Every chain read in the SDK, CLI and
  * service goes through a client built here:
  *  - RPC URLs are tried in order (viem `fallback`), each with a per-request timeout;
  *  - transient failures (timeouts, resets, HTTP 403/408/413/429/5xx, JSON-RPC -32603,

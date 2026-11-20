@@ -1,5 +1,5 @@
 /**
- * Definition of done: docs/SCHEMA.md and the SDK cannot drift. The field tables, the pinned
+ * docs/SCHEMA.md and the SDK cannot drift. The field tables, the pinned
  * fixture and its digests in the doc are compared with the SDK here.
  */
 import { test } from "node:test";

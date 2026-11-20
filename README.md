@@ -16,15 +16,28 @@ An AI agent that acts for someone, calls tools and spends money leaves no record
 
 The point is that the check needs nothing but a Hemi RPC and the contract address: the service does not have to be running or trusted. `receipts verify` and the SDK recompute the manifest hash, check the agent's signature, prove the receipt's leaf against the anchored root, confirm the batch is live on chain and report how settled it is, up to published to and final on Bitcoin through Hemi's proof-of-proof. Change one byte of the manifest, forge the signature or point the receipt at another batch, and verification fails with a specific reason. A receipt proves who signed the record of a run and that the record has not changed since; what the record says is the signer's word. The one part `verify` can check against the chain is a payment that names a transaction on the receipt's own network: a transaction that does not exist, reverted or moved a different amount makes the receipt invalid. The [viewer](viewer/README.md) does the same check in a browser and explains the result in plain words. In practice an agent framework, or a wrapper around one, runs `receipts from-trace` and `receipts attest --wait` at the end of each run and keeps the `.receipt.json` files; a principal, auditor or counterparty runs `receipts verify` on them, or drops one into the viewer.
 
-**Status.** Built and tested; deployed to Hemi testnet with verified source. On 2026-11-13 the registry was deployed to Hemi mainnet at [`0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40`](https://explorer.hemi.xyz/address/0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40), owned by the Safe `0xbe191f7072aD49c4c15434780C5cE0ED5bfB7535`, with service signer `0xcFD277613FcB5d6A7B2BFcA93d44E78a1d3c6E0c` ([DECISIONS](docs/DECISIONS.md) D-14). The mainnet smoke test ([RUNBOOK](docs/RUNBOOK.md) §7) passed the same night: three receipts paid in USDC.e, anchored in batch 1 by [`0x06396351…134b`](https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b), and verified with the service stopped ([`demo/mainnet-smoke-20261113T022336Z`](demo/mainnet-smoke-20261113T022336Z/)). Its source is [verified on the explorer](https://explorer.hemi.xyz/address/0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40?tab=contract) (exact match). The smoke-test receipts reached `btc-final` on 2026-11-14, after PoP publication paused for a day while Bitcoin fees were high (D-14).
+**Status.** Built and tested. The registry is deployed on Hemi mainnet and Hemi testnet, with verified source on both.
 
-| | Hemi testnet (`eip155:743111`) |
+| | Hemi mainnet (`eip155:43111`) | Hemi testnet (`eip155:743111`) |
+|------|------|------|
+| ReceiptRegistry | [`0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40`](https://explorer.hemi.xyz/address/0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40), deployed 2026-11-13, [source verified](https://explorer.hemi.xyz/address/0x95127A8aCa9B5c235C56A2dfd315a567Ef545A40?tab=contract) (exact match) | [`0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe`](https://testnet.explorer.hemi.xyz/address/0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe), source verified |
+| Owner | the Safe `0xbe191f7072aD49c4c15434780C5cE0ED5bfB7535` | `0xD572EfBA712C2284D1404eE47Be1599556B321e0` |
+| Service signer | `0xcFD277613FcB5d6A7B2BFcA93d44E78a1d3c6E0c` | `0xdd801e02554E08f00F3F833CF08C9cb9B70FeA39` |
+| Relayer (pays gas, no role) | `0x0c9aCd4F85946587fC15CA55Ea9A1c48Aaee162f` | `0xACadCDeE87cDbf94d440fe10E10371F8865AC22d` |
+| Deployment record | [DECISIONS](docs/DECISIONS.md) D-14 | DECISIONS D-10 |
+
+Recorded runs are kept in [`demo/`](demo/), each folder named for the time it started (UTC), with its manifests, receipts, logs and `verify` outputs. Every testnet folder holds receipts that reached `hemi-confirmed` and were verified with the service stopped. Absolute paths in the logs are shortened to paths from the repository root.
+
+| Folder | What it shows |
 |------|------|
-| ReceiptRegistry | [`0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe`](https://testnet.explorer.hemi.xyz/address/0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe), source verified |
-| Owner | `0xD572EfBA712C2284D1404eE47Be1599556B321e0` |
-| Service signer | `0xdd801e02554E08f00F3F833CF08C9cb9B70FeA39` |
-| Relayer (pays gas, no role) | `0xACadCDeE87cDbf94d440fe10E10371F8865AC22d` |
-| Live demo runs (2026-10-30 to 2026-11-05) | Each anchored receipts on testnet, reached `hemi-confirmed` and was verified with the service stopped. Batch 1, the first run: [`demo/testnet-20261030T003831Z/`](demo/testnet-20261030T003831Z/) (DECISIONS.md D-11). Batch 3, the first with all three tamper cases: [`demo/testnet-20261030T012224Z/`](demo/testnet-20261030T012224Z/), tx [`0xadc7f7ba…1550`](https://testnet.explorer.hemi.xyz/tx/0xadc7f7ba75c571e5b7afa5e1e59f39cf104b99dbe0f3008e68de859689f61550). Batch 6, the command below exactly as written, with `run.log`: [`demo/testnet-20261030T015811Z/`](demo/testnet-20261030T015811Z/), tx [`0x4b9f8a72…3e92`](https://testnet.explorer.hemi.xyz/tx/0x4b9f8a72a9aa1368e453e4015924896a1a3f0a4974a857404ef3dffa57eb3e92). Batch 19: Hemi testnet stopped mining ordinary transactions on 2026-11-04 from about 12:13 UTC, so this run timed out with its receipts pending (`run.log`). After testnet recovered on 2026-11-05, the restarted service re-signed and resent the batch, and the run's remaining steps finished from the same manifests (`resume.log`): [`demo/testnet-20261104T161720Z/`](demo/testnet-20261104T161720Z/), tx [`0xa5a78e14…f918`](https://testnet.explorer.hemi.xyz/tx/0xa5a78e1417a59be186c2f50565205cfd5f6d42b24ba9c2ed397c5ac5e27df918). Batches 20 and 21, the last batch run and the last direct run, where the caller sends its own transaction (`scripts/testnet-direct-demo.sh`): [`demo/testnet-20261105T150109Z/`](demo/testnet-20261105T150109Z/), tx [`0x227c5f05…5804`](https://testnet.explorer.hemi.xyz/tx/0x227c5f05a3ab800600f380cc9c86115cf61c76da7a0598526cfe2f7114005804), and [`demo/testnet-direct-20261105T150519Z/`](demo/testnet-direct-20261105T150519Z/), tx [`0xb04324a8…5a6e`](https://testnet.explorer.hemi.xyz/tx/0xb04324a80370afc02c15fe86f612d25e3a8315945d6a20938c65099068445a6e). Absolute paths in these logs were shortened to paths from the repository root. |
+| [`mainnet-smoke-20261113T022336Z`](demo/mainnet-smoke-20261113T022336Z/) | The mainnet smoke test ([RUNBOOK](docs/RUNBOOK.md) §7): three receipts paid in USDC.e, anchored in batch 1 by [`0x06396351…134b`](https://explorer.hemi.xyz/tx/0x06396351b82b2fce9f685163897b55aacbd020133e735e30f2f7a8947fda134b) and verified with the service stopped. They are `btc-final`, reached on 2026-11-14; Hemi's PoP publication was paused from 2026-11-13 to 2026-11-14 while Bitcoin fees were high (D-14). |
+| [`testnet-20261030T003831Z`](demo/testnet-20261030T003831Z/) | Testnet batch 1, the registry's first batch, with two tamper cases: a wrong-batch case needs an earlier batch (D-11). |
+| [`testnet-20261030T012224Z`](demo/testnet-20261030T012224Z/) | Testnet batch 3 and all three tamper cases; tx [`0xadc7f7ba…1550`](https://testnet.explorer.hemi.xyz/tx/0xadc7f7ba75c571e5b7afa5e1e59f39cf104b99dbe0f3008e68de859689f61550). |
+| [`testnet-20261030T015811Z`](demo/testnet-20261030T015811Z/) | Testnet batch 6: `scripts/testnet-demo.sh` exactly as written in [item 2](#checking-each-claim-yourself), with `run.log`; tx [`0x4b9f8a72…3e92`](https://testnet.explorer.hemi.xyz/tx/0x4b9f8a72a9aa1368e453e4015924896a1a3f0a4974a857404ef3dffa57eb3e92). The viewer's testnet examples come from it. |
+| [`testnet-20261104T161720Z`](demo/testnet-20261104T161720Z/) | Testnet batch 19, re-signed and resent after a testnet outage: Hemi testnet mined no ordinary transactions from about 12:13 UTC on 2026-11-04 until 2026-11-05. `run.log` ends with the receipts pending at its timeout; `resume.log` has the restarted service resending the batch and the remaining steps finishing from the same manifests. Tx [`0xa5a78e14…f918`](https://testnet.explorer.hemi.xyz/tx/0xa5a78e1417a59be186c2f50565205cfd5f6d42b24ba9c2ed397c5ac5e27df918). |
+| [`testnet-20261105T150109Z`](demo/testnet-20261105T150109Z/) | Testnet batch 20, the most recent batch-path run; tx [`0x227c5f05…5804`](https://testnet.explorer.hemi.xyz/tx/0x227c5f05a3ab800600f380cc9c86115cf61c76da7a0598526cfe2f7114005804). |
+| [`testnet-direct-20261105T150519Z`](demo/testnet-direct-20261105T150519Z/) | Testnet batch 21, the most recent direct-path run, where the caller sends its own transaction (`scripts/testnet-direct-demo.sh`); tx [`0xb04324a8…5a6e`](https://testnet.explorer.hemi.xyz/tx/0xb04324a80370afc02c15fe86f612d25e3a8315945d6a20938c65099068445a6e). |
+| [`x402-fork-20261030T010042Z`](demo/x402-fork-20261030T010042Z/), [`x402-fork-20261113T011857Z`](demo/x402-fork-20261113T011857Z/) | `scripts/x402-fork-demo.sh` ([item 7](#checking-each-claim-yourself)): a paid attestation settled through x402facilitator on local forks of Hemi; `run.log` only (D-12). |
 
 | Path | What it is |
 |------|------|
@@ -33,9 +46,10 @@ The point is that the check needs nothing but a Hemi RPC and the contract addres
 | [`cli/`](cli/README.md) | `receipts`: `from-trace`, `attest`, `status`, `fetch`, `verify` |
 | [`service/`](service/README.md) | Attestation service: `POST /attest` (x402-paid), batcher, status poller, SQLite; Dockerfile |
 | [`viewer/`](viewer/README.md) | Receipt viewer: one page that verifies a receipt in the browser and explains it to a non-technical reviewer |
-| [`e2e/`](e2e/) | The Definition of done as one test, plus shared helpers (anvil, deployer, fault-injecting RPC proxy) |
+| [`e2e/`](e2e/) | One end-to-end test of the claims in [Checking each claim yourself](#checking-each-claim-yourself), plus shared helpers (anvil, deployer, fault-injecting RPC proxy) |
+| [`demo/`](demo/) | Recorded runs on mainnet, testnet and local forks (listed above) |
 | [`docs/SCHEMA.md`](docs/SCHEMA.md) | Every hashed, signed or anchored byte: manifest v1, receipt file, leaf, EIP-712, contract interface |
-| [`docs/DECISIONS.md`](docs/DECISIONS.md) | The design decisions and every verify-first item, with commands and outputs |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | The design decisions, and the external facts they rest on, with the commands and outputs that checked them |
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Accounts, deployment, incidents |
 | [`docs/research/STATUS_RESOLUTION.md`](docs/research/STATUS_RESOLUTION.md) | How the Bitcoin stages are read, and why no Hemi API is used |
 
@@ -70,7 +84,7 @@ node cli/dist/index.js verify tampered.json $LOCAL         # one byte changed: i
 docker compose --profile local down
 ```
 
-The three receipts share one batch and one anchoring transaction. `attest` prints `<runId> hemi-confirmed` for each and writes `receipts/<runId>.receipt.json`; `verify` prints every check. A local chain never reaches the Bitcoin stages. The same steps against Hemi testnet are [item 2](#definition-of-done-how-to-check-each-item) below, with your own keys ([Your own testnet deployment](#your-own-testnet-deployment)).
+The three receipts share one batch and one anchoring transaction. `attest` prints `<runId> hemi-confirmed` for each and writes `receipts/<runId>.receipt.json`; `verify` prints every check. A local chain never reaches the Bitcoin stages. The same steps against Hemi testnet are [item 2](#checking-each-claim-yourself) below, with your own keys ([Your own testnet deployment](#your-own-testnet-deployment)).
 
 ## Tests
 
@@ -79,7 +93,7 @@ The test suites also need Foundry (`anvil`, `cast`) and `openssl`:
 ```bash
 npm ci
 npm run build     # sdk, cli, service, viewer
-npm test          # contracts, sdk, cli, service, viewer and the end-to-end Definition-of-done test
+npm test          # contracts, sdk, cli, service, viewer and the end-to-end test
 ```
 
 `npm test` takes a few minutes and needs no Hemi network: every chain test runs on a local anvil. The first contract compile downloads solc 0.8.28 once. The end-to-end test runs the real service and CLI binaries, with every chain call going through a proxy that randomly fails 20 to 30% of requests (HTTP 429/5xx, resets, stalls, JSON-RPC errors, and answers dropped after the request took effect).
@@ -95,7 +109,7 @@ mkdir -m 700 -p .secrets
 for role in owner service relayer agent; do (umask 077 && cast wallet new --json > .secrets/testnet-$role.json); done
 ```
 
-Fund the relayer with about 0.002 testnet ETH ([RUNBOOK §2](docs/RUNBOOK.md#2-day-one-testnet-gas) says how); the other three need none. Then:
+Fund the relayer with about 0.002 testnet ETH ([RUNBOOK §2](docs/RUNBOOK.md#2-testnet-gas) says how); the other three need none. Then:
 
 ```bash
 scripts/testnet-deploy.sh --fork   # rehearsal on an anvil fork of Hemi testnet; sends nothing live
@@ -103,7 +117,7 @@ scripts/testnet-deploy.sh          # deploys your own registry, verifies its sou
 scripts/testnet-demo.sh            # item 2 below: three receipts, one batch, verified with the service stopped
 ```
 
-The script keeps your deployment apart from this project's committed one: its Ignition deployment id is `receipts-hemi-testnet-<your owner's first 8 hex digits>` (or `DEPLOYMENT_ID`), with its own parameters file, both gitignored. Your registry is not the SDK's known deployment, so pass `--registry <your address>` (the `REGISTRY_ADDRESS` in `.env`) to `receipts verify` and `receipts status`; the demo script does. Without any keys you can still verify this project's own testnet and mainnet receipts: [item 3](#definition-of-done-how-to-check-each-item) needs only the public RPC.
+The script keeps your deployment apart from this project's committed one: its Ignition deployment id is `receipts-hemi-testnet-<your owner's first 8 hex digits>` (or `DEPLOYMENT_ID`), with its own parameters file, both gitignored. Your registry is not the SDK's known deployment, so pass `--registry <your address>` (the `REGISTRY_ADDRESS` in `.env`) to `receipts verify` and `receipts status`; the demo script does. Without any keys you can still verify this project's own testnet and mainnet receipts: [item 3](#checking-each-claim-yourself) needs only the public RPC.
 
 ## Paid requests through x402facilitator
 
@@ -117,9 +131,11 @@ scripts/x402-fork-demo.sh                                                  # nee
 
 The forks read state from Hemi's public RPCs, so this demo needs network access. If port 8080 is taken, set `FACILITATOR_PORT`. A real deployment runs x402facilitator with its own signer keys; its README covers that.
 
-## Definition of done: how to check each item
+## Checking each claim yourself
 
-1. **Contract on testnet with verified source; owner and service key are different accounts.** Open the explorer link above, or read it back:
+Each item states something the system does and how to check it.
+
+1. **The registry is on testnet with verified source, and its owner and service signer are different accounts.** Open the explorer link above, or read it back:
 
    ```bash
    R=https://testnet.rpc.hemi.network/rpc; A=0xef9Bb805581c0E947DEA54052Ad360485c3F73Fe
@@ -135,9 +151,9 @@ The forks read state from Hemi's public RPCs, so this demo needs network access.
    scripts/testnet-demo.sh
    ```
 
-   If Docker's virtual disk is full, the service refuses to start with "database or disk is full". Prefix the command with `COMPOSE_FILE=docker-compose.yml:docker-compose.host-data.yml`, which keeps the database in `./data` on the host. The committed runs used it.
+   If Docker's virtual disk is full, the service refuses to start with "database or disk is full". Prefix the command with `COMPOSE_FILE=docker-compose.yml:docker-compose.host-data.yml`, which keeps the database in `./data` on the host. The recorded testnet runs in `demo/` use it.
 
-   It runs `docker compose up -d receipts` with the existing image; compose builds it if it is missing. After changing service code, run `docker compose build` first or set `BUILD=1`; a rebuild needs free space on Docker's disk. The script builds three fresh manifests with `receipts from-trace`, and runs `receipts attest` on them. It fails unless all three anchors share one transaction and one batch id, and the transaction carries exactly one `BatchAttested` event for that batch with count 3. It then polls `receipts status --no-btc`, which shows the service's own poller status, until each is `hemi-confirmed` (the safe head plus 10 blocks, a few minutes), and stops the service. Finally it runs `receipts verify` on each receipt, and on tampered copies: one changed manifest byte, a forged agent signature, and, when an earlier batch exists, a proof pointed at that batch. Each tampered copy must exit 1. Everything, including the console output (`run.log`), lands in `demo/testnet-<time>/`; the committed run is linked in the table above. By hand, the core is:
+   It runs `docker compose up -d receipts` with the existing image; compose builds it if it is missing. After changing service code, run `docker compose build` first or set `BUILD=1`; a rebuild needs free space on Docker's disk. The script builds three fresh manifests with `receipts from-trace`, and runs `receipts attest` on them. It fails unless all three anchors share one transaction and one batch id, and the transaction carries exactly one `BatchAttested` event for that batch with count 3. It then polls `receipts status --no-btc`, which shows the service's own poller status, until each is `hemi-confirmed` (the safe head plus 10 blocks, a few minutes), and stops the service. Finally it runs `receipts verify` on each receipt, and on tampered copies: one changed manifest byte, a forged agent signature, and, when an earlier batch exists, a proof pointed at that batch. Each tampered copy must exit 1. Everything, including the console output (`run.log`), lands in `demo/testnet-<time>/`; the recorded runs are listed under **Status** at the top of this page. By hand, the core is:
 
    ```bash
    docker compose up -d receipts
@@ -145,7 +161,7 @@ The forks read state from Hemi's public RPCs, so this demo needs network access.
    node cli/dist/index.js status <runId>
    ```
 
-3. **`receipts verify` gives `valid: true` for a real receipt, and `valid: false` with a reason for (a) one changed manifest byte, (b) a proof against the wrong batch, (c) a forged agent signature.** Covered against the real binaries by `npm test -w e2e` (`e2e/test/dod.test.ts`). To try it on the mainnet smoke-test receipt:
+3. **`receipts verify` gives `valid: true` for a real receipt, and `valid: false` with a reason for (a) one changed manifest byte, (b) a proof against the wrong batch, (c) a forged agent signature.** Covered against the real binaries by `npm test -w e2e` (`e2e/test/end-to-end.test.ts`). To try it on the mainnet smoke-test receipt:
 
    ```bash
    F=demo/mainnet-smoke-20261113T022336Z/receipts/0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2.receipt.json
@@ -154,13 +170,13 @@ The forks read state from Hemi's public RPCs, so this demo needs network access.
    node cli/dist/index.js verify "$T"                                 # one byte changed: exit 1, manifest hash mismatch
    ```
 
-   `verify` prints every check (file, registry, chainId, manifest, agentSignature, anchor, merkleProof, batch, onchainProof, anchorTx, status, spend) and a specific reason for each failure. Every testnet receipt under `demo/` now fails `spend`: the example trace they were made from listed a transaction hash that never existed on testnet (D-17). The mainnet receipts list the same hash, but on testnet, so for them it is not checked. `scripts/testnet-demo.sh` (item 2) runs all three tamper cases against live testnet receipts and keeps the outputs (`verify-tamper-*.txt`).
+   `verify` prints every check (file, registry, chainId, manifest, agentSignature, anchor, merkleProof, batch, onchainProof, anchorTx, status, spend) and a specific reason for each failure. Every testnet receipt under `demo/` fails `spend`: its manifest names a payment transaction that does not exist on testnet, a made-up hash in the example trace it was built from (D-17). The mainnet receipts list the same hash, but on testnet, so for them it is not checked. `scripts/testnet-demo.sh` (item 2) runs all three tamper cases against live testnet receipts and keeps the outputs (`verify-tamper-*.txt`).
 
-4. **Verification needs only an RPC URL and the contract address, proven by a test that kills the service first.** `e2e/test/dod.test.ts` stops the service process and checks that `/health` no longer answers before any `verify` runs. `scripts/testnet-demo.sh` does the same with `docker compose stop`, and fails unless `/health` stops answering before it verifies. The registry address comes from `--registry` or the SDK's known deployment, never from the receipt file.
+4. **Verification needs only an RPC URL and the contract address, proven by a test that kills the service first.** `e2e/test/end-to-end.test.ts` stops the service process and checks that `/health` has stopped answering before any `verify` runs. `scripts/testnet-demo.sh` does the same with `docker compose stop`, and fails unless `/health` stops answering before it verifies. The registry address comes from `--registry` or the SDK's known deployment, never from the receipt file.
 
 5. **An identical manifest returns the original receipt without a new tx; a different manifest with a reused runId is rejected.** Covered by `npm test -w e2e`, which checks that the relayer's nonce and the registry's `batchCount` do not move, and by `service/test/attest-idempotency.test.ts`. With the CLI, an identical resubmission prints `(already submitted)`, and a reused runId exits 1 with a 409.
 
-6. **The status poller reaches `btc-published` or `btc-final` on testnet, or DECISIONS.md records why that stage cannot be read yet.** It cannot be reached on testnet: nobody publishes Hemi testnet keystones to Bitcoin any more, and no Hemi-run finality API works. The evidence and the method are in [DECISIONS.md D-4](docs/DECISIONS.md). Testnet receipts therefore stop at `hemi-confirmed`, and their status carries `btc.source: "unavailable"` with the reason, checked live on every poll. On mainnet the same reader reads both Bitcoin stages from public data, and this read-only check shows it on real mainnet blocks:
+6. **The status poller reads `btc-published` and `btc-final` on mainnet; on testnet those stages cannot be read, and DECISIONS.md records why.** On testnet nobody publishes Hemi keystones to Bitcoin, and no Hemi-run finality API works. The evidence and the method are in [DECISIONS.md D-4](docs/DECISIONS.md). Testnet receipts therefore stop at `hemi-confirmed`, and their status carries `btc.source: "unavailable"` with the reason, checked live on every poll. On mainnet the same reader reads both Bitcoin stages from public data, and this read-only check shows it on real mainnet blocks:
 
    ```bash
    LIVE_HEMI=1 node --import tsx --test sdk/test/live.test.ts
@@ -174,11 +190,11 @@ The forks read state from Hemi's public RPCs, so this demo needs network access.
    scripts/x402-fork-demo.sh
    ```
 
-   The demo forks Hemi with the facilitator project's own script and starts its facilitator image. It then runs this service with `DEV_FREE` unset, and has the CLI pay the 402 with x402 (USDC.e through Permit2). Finally it checks that `payTo` received exactly the price and that the receipt was anchored. The result of the last run is in [DECISIONS.md D-12](docs/DECISIONS.md).
+   The demo forks Hemi with the facilitator project's own script and starts its facilitator image. It then runs this service with `DEV_FREE` unset, and has the CLI pay the 402 with x402 (USDC.e through Permit2). Finally it checks that `payTo` received exactly the price and that the receipt was anchored. [DECISIONS.md D-12](docs/DECISIONS.md) shows the output; the recorded runs are in `demo/x402-fork-*/`.
 
 8. **SCHEMA.md and the SDK types agree, enforced by a pinned digest.** `sdk/test/schema-doc.test.ts` compares the field tables in SCHEMA.md with the SDK's field lists, and hashes the fixture in SCHEMA.md §1.4 to the pinned `manifestHash` and leaf. An independent Python canonicalization gives the same digest (DECISIONS.md D-1).
 
-9. **DECISIONS.md records the four design decisions and every verify-first item with its command and output.** The decisions are D-1 to D-4; the verify-first table at the top links each item to its entry.
+9. **DECISIONS.md records each design decision, and each external fact the design rests on, with the command that checked it and its output.** The core design decisions are D-1 to D-4 (manifest schema, batching, who signs, status resolution); the table at the top lists the external facts (chain ids, RPCs, tokens, Bitcoin data) and links each to its entry.
 
 ## Receipt viewer
 
@@ -190,7 +206,7 @@ It is hosted at **https://dimitryb.github.io/hemi-agent-receipts/**, published f
 npm run build && npm run serve -w viewer    # then open http://127.0.0.1:5180/
 ```
 
-The examples are real receipts: one from the mainnet smoke test, and from the testnet run a signed and anchored receipt, the same receipt without its run details, and three tampered copies. The testnet receipt lists a payment whose transaction never existed, so since D-17 it shows as genuine but with a false payment. Details are in [viewer/README.md](viewer/README.md) and [DECISIONS.md D-13](docs/DECISIONS.md).
+The examples are real receipts: one from the mainnet smoke test, and from testnet batch 6 a signed and anchored receipt, the same receipt without its run details, and three tampered copies. The testnet receipt is genuine but lists a payment whose transaction does not exist, so it fails the spend check (D-17). Details are in [viewer/README.md](viewer/README.md) and [DECISIONS.md D-13](docs/DECISIONS.md).
 
 ## How it works
 
@@ -211,7 +227,7 @@ receipt file ◀── GET /receipts/:runId ◀── proof, status ◀───
 
 ## Known limits
 
-- **Mainnet** has the registry (D-14) and has served the three paid receipts of the smoke test. Its USDC.e address rests on Hemi's token list, on-chain reads and the explorer's own record (DECISIONS.md D-7, Q-1). Look-alike tokens share the USDC.e and hemiBTC symbols on mainnet; the code names tokens only by address.
+- **Mainnet** has the registry (D-14); the three paid receipts of the smoke test are its only recorded use. Its USDC.e address rests on Hemi's token list, on-chain reads and the explorer's own record (DECISIONS.md D-7, Q-1). Look-alike tokens share the USDC.e and hemiBTC symbols on mainnet; the code names tokens only by address.
 - **Bitcoin stages on testnet** cannot be reached until Hemi runs PoP on testnet again (D-4).
 - **Bitcoin data on mainnet** comes from public Esplora APIs, which are trusted for it; hVM's `0x43` precompile gives a cross-check. PoP miner addresses rotate; the reader also scans Bitcoin blocks to find new ones. Anyone can add transactions to a miner's address history, so a full page of forged low keystones can end the address search early. That only understates finality, and block scanning finds the publication where it is on; the viewer has it off by default.
 - **A settlement whose outcome is unknown** is held for 30 minutes (D-12), and then the payment's nonce on chain decides. This covers a lost answer, a kill mid-settlement and a named transaction that never appears. If the nonce is used, the payment landed: the receipt is accepted and nobody is charged again. If it is unused and the authorization has expired, the payment can never land, so a retry may pay. If the read fails, or the authorization is still inside its deadline, the hold stays, so a long RPC outage holds the receipt that long. Only a retry asks the chain about a lost answer or a kill, so a buyer who paid and never comes back gets no receipt.

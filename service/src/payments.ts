@@ -147,7 +147,8 @@ export function paymentKey(p: { transferMethod?: string; asset?: string; payer?:
 
 /**
  * Whether this run id owns the payment's authorization, claiming it if no run id has yet (a
- * record from before claims existed). Undefined for a record with no authorization at all.
+ * record written before migration 0004 added claims). Undefined for a record with no
+ * authorization at all.
  * `owner: null` is a record whose authorization cannot be keyed (a nonce no contract accepts):
  * nothing can tie a transfer to it, so it is never credited.
  */
@@ -246,8 +247,8 @@ async function scanRange(chain: ChainContext, payment: PaymentRecord): Promise<{
  * with the payer and nonce: the RPC may have missed logs, and a later read decides.
  *
  * A failed or slow read says nothing, and keeps the hold. A row without an authorization on
- * record has no nonce to read. Settling writes one first, so this is a row from an older version:
- * it is released as it always was, and logged.
+ * record has no nonce to read. Settling writes one first, so such a row comes from an older
+ * version: it is released, and logged.
  */
 export async function settleEndedHold(deps: { chain: ChainContext; config: Config; store: Store; log: Logger }, row: ReceiptRow, now: number): Promise<"paid" | "released" | "held"> {
   const { chain, config, store, log } = deps;
@@ -262,8 +263,8 @@ export async function settleEndedHold(deps: { chain: ChainContext; config: Confi
     return "released";
   }
 
-  // Its authorization may pay for another receipt (one offered for two run ids before claims
-  // existed): then the transfer that settled it is that receipt's, never this one's.
+  // Its authorization may pay for another receipt (records written before migration 0004 added
+  // claims can share one): then the transfer that settled it is that receipt's, never this one's.
   const claim = await ownsPayment(store, runId, { transferMethod, asset, payer, nonce }, now);
   if (claim && claim.owner === null) {
     log.error("x402: a held payment's nonce is not one its contract would accept, so no transfer can be tied to it; still holding the receipt", { runId, payer, nonce });

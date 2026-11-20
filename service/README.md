@@ -69,8 +69,8 @@ curl -s localhost:8787/attest -H 'content-type: application/json' -d '{
   has code (a contract wallet, or an EIP-7702-delegated EOA) is checked only through EIP-1271
   `isValidSignature` over the RPC, as the contract does. Whether an account has code is cached
   for ten minutes; the lookups and the EIP-1271 calls share one rate limit
-  (`503 signature_check_busy`). An ECDSA match whose account cannot be looked up right now is
-  accepted, as before the code check existed.
+  (`503 signature_check_busy`). An ECDSA match is accepted when its account cannot be looked
+  up at that moment (see Limits below).
 - Validation and the idempotency lookup run **before** the paywall, so nobody pays for a
   rejected request or a replay:
 
@@ -225,15 +225,15 @@ checked every `POLL_INTERVAL_SECONDS`. Confirmed ones are checked at `age / 10`,
 and `POLL_MAX_INTERVAL_SECONDS`. A `btc-final` anchor cannot be reorged out, but the owner can
 still void its batch, so `btc-final` batches are re-read every `POLL_FINAL_CHECK_SECONDS` with
 `getBatch` alone (no block or Bitcoin reads); a void reaches the API within that interval.
-`voided` batches are no longer checked.
+`voided` batches are not polled.
 Errors back off exponentially, up to 5 min.
 
 - `pending → hemi-included → hemi-confirmed → btc-published → btc-final`. Hemi progress is
   retained through lagging RPC reads. If the anchoring block is reorged out, `resolveStatus` answers
   `pending`. The batch then goes back to the batcher (`sent`, which looks its hashes up again)
   and its receipts go back to `pending`. A direct receipt goes back to detection.
-- A provisional `btc-published` status returns to `hemi-confirmed` when the Bitcoin reader no
-  longer confirms its publication, including after a Bitcoin reorg or an unavailable read.
+- A provisional `btc-published` status returns to `hemi-confirmed` when the Bitcoin reader stops
+  confirming its publication, including after a Bitcoin reorg or an unavailable read.
   The response replaces the old Bitcoin evidence with the current result. The Hemi anchor stays
   intact, and later polls can advance the receipt again.
 - `voided` (`getBatch(id).voided`) is terminal.
@@ -279,8 +279,8 @@ Consequences in this service:
   (`settle_lease_until`, 30 min, ended by the settle hooks) while its payment settles. A second
   request for the same receipt during the lease gets `409 payment_pending` with `Retry-After`,
   from the precheck or, when both passed the precheck before either stored anything, from the
-  handler's refused rewrite. Without the lease two overlapping requests both reached the handler,
-  both answered 202 and both settled.
+  handler's refused rewrite. Without the lease, two overlapping requests would both reach the
+  handler, both answer 202 and both settle.
 - Settling starts by recording the payment on the row (`payment_json` status `settling`: payer,
   nonce, deadline, asset, amount, the chain's head as `settleBlock` and the time), so a kill from
   then on leaves what the chain needs to be asked. The head is read with a 2 s limit; without it
@@ -332,8 +332,9 @@ Consequences in this service:
   - The read failed: the hold stays, retries get `409 payment_pending`, and the log says
     `could not read a held payment's nonce`.
 
-  A row with no authorization on record is from before settling wrote one. It has no nonce to
-  read, so it is released as before, with an error in the log.
+  A row with no authorization on record was written by an older version of the service, which
+  settled without recording one first. It has no nonce to read, so when its hold runs out it is
+  released, with an error in the log, and a retry pays.
 - **Stopping.** SIGTERM or SIGINT stops taking connections at once and waits up to 185 s for
   every paid request already received, from verify through its settlement, even if its buyer
   has hung up. A paid request that arrives after the stop began, on a connection kept alive,
