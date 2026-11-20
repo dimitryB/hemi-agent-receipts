@@ -103,7 +103,10 @@ export class EsploraClient {
       await this.bucket.take();
       this.stats.requests++;
       try {
-        const res = await this.fetchFn(url, { signal: AbortSignal.timeout(this.options.timeoutMs ?? 20_000) });
+        // Called on its own, never as this.fetchFn(…): a browser's fetch rejects any `this` but the
+        // window with "Illegal invocation" (Node's does not check).
+        const fetchFn = this.fetchFn;
+        const res = await fetchFn(url, { signal: AbortSignal.timeout(this.options.timeoutMs ?? 20_000) });
         if (res.ok) {
           if (kind === "bytes") return new Uint8Array(await res.arrayBuffer());
           const text = await res.text();

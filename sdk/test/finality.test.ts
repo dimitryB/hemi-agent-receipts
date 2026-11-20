@@ -312,6 +312,25 @@ describe("defaults and the Esplora client", () => {
     assert.equal(down.stats.requests, 3);
   });
 
+  test("calls fetch the way a browser requires: not as a method of the client", async () => {
+    // A browser's fetch throws "Illegal invocation" when `this` is anything but the window (or
+    // undefined); Node's does not check, so this stands in for the browser's.
+    const browserFetch = function (this: unknown, _input: string | URL | Request) {
+      if (this !== undefined && this !== globalThis) return Promise.reject(new TypeError("Failed to execute 'fetch' on 'Window': Illegal invocation"));
+      return Promise.resolve(new Response("973756"));
+    } as FetchLike;
+    const passed = new EsploraClient({ baseUrls: ["https://a.invalid/api"], fetch: browserFetch, ...fast, retries: 0 });
+    assert.equal(await passed.tipHeight(), 973_756, "a fetch passed in");
+    const original = globalThis.fetch;
+    globalThis.fetch = browserFetch as typeof globalThis.fetch;
+    try {
+      const byDefault = new EsploraClient({ baseUrls: ["https://a.invalid/api"], ...fast, retries: 0 });
+      assert.equal(await byDefault.tipHeight(), 973_756, "the global fetch, as in the viewer");
+    } finally {
+      globalThis.fetch = original;
+    }
+  });
+
   test("requests are paced", async () => {
     const client = new EsploraClient({ baseUrls: ["https://a.invalid/api"], fetch: async () => new Response("1"), requestsPerSecond: 10, burst: 1 });
     const started = Date.now();
