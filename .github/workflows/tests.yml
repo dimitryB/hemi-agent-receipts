@@ -1,0 +1,44 @@
+# Runs the whole test suite (contracts, SDK, CLI, service, viewer and the end-to-end test), then
+# the type checks, on every supported Node line. Every chain test runs on a local anvil, so this
+# needs no keys, secrets or Hemi network; the live tests (LIVE_HEMI, X402_IT_*) stay skipped.
+# Actions are pinned to commits, and Foundry to the version the tests were written against.
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: tests-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  test:
+    name: test (Node ${{ matrix.node }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        node: [22, 24, 26]
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ matrix.node }}
+          cache: npm
+      - uses: foundry-rs/foundry-toolchain@dba66c27052e63476d886f22216e119ba7e615bf # v1.9.2
+        with:
+          version: v1.8.6
+          cache: false
+      - run: anvil --version && node --version
+      - run: npm ci
+      - run: npm test
+      - run: npm run typecheck

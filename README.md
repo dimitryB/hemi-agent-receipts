@@ -1,5 +1,7 @@
 # hemi-agent-receipts
 
+[![Tests](https://github.com/dimitryB/hemi-agent-receipts/actions/workflows/tests.yml/badge.svg)](https://github.com/dimitryB/hemi-agent-receipts/actions/workflows/tests.yml)
+
 Turns an AI agent run into a signed manifest, anchors its hash on Hemi in Merkle batches, and later answers "is this receipt real, and is it Bitcoin-final?" with a proof anyone can check from a Hemi RPC alone.
 
 - **The agent** signs an EIP-712 receipt over the manifest's hash.
@@ -79,6 +81,8 @@ npm test          # contracts, sdk, cli, service, viewer and the end-to-end Defi
 ```
 
 `npm test` takes a few minutes and needs no Hemi network: every chain test runs on a local anvil. The first contract compile downloads solc 0.8.28 once. The end-to-end test runs the real service and CLI binaries, with every chain call going through a proxy that randomly fails 20 to 30% of requests (HTTP 429/5xx, resets, stalls, JSON-RPC errors, and answers dropped after the request took effect).
+
+GitHub Actions runs `npm ci`, `npm test` and `npm run typecheck` on Node 22, 24 and 26 for every push to `main` and every pull request ([`.github/workflows/tests.yml`](.github/workflows/tests.yml)), with no secrets. The live tests (`LIVE_HEMI=1` and the `X402_IT_*` variables) are not run there.
 
 ## Your own testnet deployment
 
