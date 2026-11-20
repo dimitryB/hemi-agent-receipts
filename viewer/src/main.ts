@@ -15,8 +15,10 @@ import {
   defaultFinalityReader,
   explorerTxUrl,
   parseReceiptFile,
+  unavailableFinality,
   verify,
   VERIFY_CHECKS,
+  type FinalityReader,
   type ManifestV1,
   type ReceiptFile,
   type VerifyResult,
@@ -24,6 +26,7 @@ import {
 import { createPublicClient, custom, type Address, type Hex } from "viem";
 import {
   agreesLocally,
+  BITCOIN_CHECKING,
   CHECK_TEXT,
   checkToneOf,
   ladderOf,
@@ -232,22 +235,41 @@ async function check(): Promise<void> {
     return;
   }
   const scan = $<HTMLInputElement>("scan").checked;
+  const finality = defaultFinalityReader(file.chainId, file.chainId === 43111 ? { scanMaxBlocks: scan ? 36 : 0 } : {});
+  const verifyWith = (reader: FinalityReader) =>
+    verify(raw, { registry: registry as Address, rpcUrls: [rpc], finality: reader, clientOptions: { retryCount: 4, timeoutMs: 15_000 } });
+  // Bitcoin answers slowly (the public explorers are asked at a gentle pace, so up to half a
+  // minute on mainnet). First show everything Hemi answers, with the Bitcoin steps marked as
+  // being checked; then check again with Bitcoin and replace it. The second result is the one
+  // that stands, verdict included.
+  const twoSteps = finality !== unavailableFinality;
   let result: VerifyResult;
   try {
-    result = await verify(raw, {
-      registry: registry as Address,
-      rpcUrls: [rpc],
-      finality: defaultFinalityReader(file.chainId, file.chainId === 43111 ? { scanMaxBlocks: scan ? 36 : 0 } : {}),
-      clientOptions: { retryCount: 4, timeoutMs: 15_000 },
-    });
+    result = await verifyWith(twoSteps ? bitcoinLater : finality);
+    if (mine !== run) return;
+    if (twoSteps && result.status?.btc?.detail === BITCOIN_CHECKING) {
+      renderResult(file, result, registry as Address, rpc, { kind: "live" });
+      result = await verifyWith(finality);
+    }
   } catch (error) {
     if (mine !== run) return;
     renderVerdict({ tone: "unknown", title: "Could not finish checking", summary: error instanceof Error ? error.message : String(error) });
     return;
   }
   if (mine !== run) return;
+  // Redrawing must not shut a box the reader opened while Bitcoin was being checked.
+  const sections = ["ladder", "checks", "proof", "tech"];
+  const opened = sections.map((id) => [...$(id).querySelectorAll("details")].map((d) => d.open));
   renderResult(file, result, registry as Address, rpc, { kind: "live" });
+  sections.forEach((id, i) => $(id).querySelectorAll("details").forEach((d, j) => { if (opened[i]![j]) d.open = true; }));
 }
+
+/** Answers at once that Bitcoin is still being checked, for the first, quick result. */
+const bitcoinLater: FinalityReader = {
+  async read() {
+    return { source: "unavailable", detail: BITCOIN_CHECKING };
+  },
+};
 
 /** One eth_chainId request: any HTTP answer means the network can be reached from this page. */
 async function reachable(rpc: string): Promise<boolean> {
@@ -402,6 +424,8 @@ function renderChecking(file: ReceiptFile): void {
 }
 
 function renderResult(file: ReceiptFile, result: VerifyResult, registry: Address, rpc: string, mode: Mode): void {
+  // A live check renders twice (first without Bitcoin, then with it): start from empty sections.
+  for (const id of ["ladder", "checks", "proof", "tech"]) $(id).replaceChildren();
   const offline = mode.kind === "offline";
   const network = networkName(file.chainId);
   const verdict = verdictOf(file, result, { offline });
@@ -446,10 +470,10 @@ function renderLadder(ladder: HTMLElement, file: ReceiptFile, result: VerifyResu
   for (const s of steps) {
     ol.append(
       h("li", { class: `step step-${s.state}` },
-        h("span", { class: "dot", "aria-hidden": "true" }, s.state === "done" || s.state === "current" ? "●" : s.state === "blocked" ? "⊘" : "○"),
+        h("span", { class: "dot", "aria-hidden": "true" }, s.state === "done" || s.state === "current" ? "●" : s.state === "blocked" ? "⊘" : s.state === "checking" ? "◌" : "○"),
         h("div", {},
           h("strong", {}, s.label),
-          h("span", { class: "sr-only" }, ` (${s.state === "current" ? "reached" : s.state === "blocked" ? "not reachable now" : s.state})`),
+          h("span", { class: "sr-only" }, ` (${s.state === "current" ? "reached" : s.state === "blocked" ? "not reachable now" : s.state === "checking" ? "being checked" : s.state})`),
           h("p", {}, s.detail),
         ),
       ),

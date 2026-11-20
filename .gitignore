@@ -24,3 +24,5 @@ contracts/ignition/parameters/receipts-hemi-testnet-*.json
 .secrets/
 # demo evidence logs are committed
 !demo/**/*.log
+# npm pack output (sdk/README.md)
+*.tgz

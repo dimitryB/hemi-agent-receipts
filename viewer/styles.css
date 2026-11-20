@@ -236,8 +236,11 @@ textarea { font-family: var(--mono); font-size: 0.85rem; resize: vertical; margi
 .step-done .dot, .step-current .dot { color: var(--hemi-500); }
 .step-done:not(:last-child)::after { background: var(--hemi-500); }
 .step-current strong::after { content: "  ← here now"; color: var(--accent); font-weight: 500; font-size: 0.85rem; }
-.step-todo strong, .step-blocked strong { color: var(--text-2); font-weight: 500; }
+.step-todo strong, .step-blocked strong, .step-checking strong { color: var(--text-2); font-weight: 500; }
 .step-blocked .dot { color: var(--unknown); }
+.step-checking .dot { color: var(--wait); animation: checking 1.4s ease-in-out infinite; }
+@keyframes checking { 50% { opacity: 0.3; } }
+@media (prefers-reduced-motion: reduce) { .step-checking .dot { animation: none; } }
 
 /* ---------------------------------------------------------------- checks and proof */
 

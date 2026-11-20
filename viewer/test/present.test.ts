@@ -18,6 +18,7 @@ import { createPublicClient, custom, type Hex } from "viem";
 import {
   ago,
   agreesLocally,
+  BITCOIN_CHECKING,
   CHECK_TEXT,
   checkToneOf,
   duration,
@@ -301,6 +302,17 @@ describe("finality ladder", () => {
     const steps = ladderOf(status, 43_111);
     assert.deepEqual(steps.map((s) => s.state), ["done", "done", "current", "todo", "todo"]);
     assert.match(steps[3]!.detail, /an estimate/);
+  });
+
+  test("while Bitcoin is still being checked, its steps say so and are not called blocked", () => {
+    const status: StatusInfo = { ...confirmedTestnet, btc: { source: "unavailable", detail: BITCOIN_CHECKING } };
+    const steps = ladderOf(status, 43_111);
+    assert.deepEqual(steps.map((s) => s.state), ["done", "done", "current", "checking", "checking"]);
+    assert.match(steps[3]!.detail, /^Checking Bitcoin now/);
+    assert.equal(steps[4]!.detail, "Needs the step above first.");
+    assert.equal(plainBitcoin(status, 43_111)!.tone, "wait", "a wait, not an unknown: no 'why' box under the ladder");
+    // Any other unavailable answer is still a blocked step with its reason.
+    assert.deepEqual(ladderOf({ ...confirmedTestnet, btc: { source: "unavailable", detail: "Bitcoin finality could not be read: x" } }, 43_111).slice(3).map((s) => s.state), ["blocked", "blocked"]);
   });
 
   test("a voided batch reaches no stage", () => {

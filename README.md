@@ -39,6 +39,8 @@ The point is that the check needs nothing but a Hemi RPC and the contract addres
 | [`docs/RUNBOOK.md`](docs/RUNBOOK.md) | Accounts, deployment, incidents |
 | [`docs/research/STATUS_RESOLUTION.md`](docs/research/STATUS_RESOLUTION.md) | How the Bitcoin stages are read, and why no Hemi API is used |
 
+The SDK and the CLI are **not published to npm**, so use them from a clone of this repository; do not `npm install @hemi-receipts/…` from the registry. [sdk/README.md](sdk/README.md) shows how to install the SDK in another project from a tarball. There is no public receipts service either: to make receipts, run the [Quickstart](#quickstart) on a local chain or your [own testnet deployment](#your-own-testnet-deployment). Verifying needs neither: the CLI's `verify` and the [hosted viewer](https://dimitryb.github.io/hemi-agent-receipts/) only read the chain.
+
 ## Quickstart
 
 Everything runs on your machine: a local chain (anvil, in Docker), the registry, the attestation service and the CLI. It needs no keys, no funds and no Hemi network. You need Node 22.18 or later, Docker with Compose v2, and `jq` for the tamper step.
@@ -143,7 +145,7 @@ The forks read state from Hemi's public RPCs, so this demo needs network access.
    node cli/dist/index.js status <runId>
    ```
 
-3. **`receipts verify` gives `valid: true` for a real receipt, and `valid: false` with a reason for (a) one changed manifest byte, (b) a proof against the wrong batch, (c) a forged agent signature.** Covered against the real binaries by `npm test -w e2e` (`e2e/test/dod.test.ts`). To try it on a testnet receipt from the demo run:
+3. **`receipts verify` gives `valid: true` for a real receipt, and `valid: false` with a reason for (a) one changed manifest byte, (b) a proof against the wrong batch, (c) a forged agent signature.** Covered against the real binaries by `npm test -w e2e` (`e2e/test/dod.test.ts`). To try it on the mainnet smoke-test receipt:
 
    ```bash
    F=demo/mainnet-smoke-20261113T022336Z/receipts/0x1a35f3670bfe84f691cb179f235bd8d454bc40c44bb5bba47e51c6e5de6eefb2.receipt.json

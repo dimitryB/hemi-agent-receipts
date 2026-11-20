@@ -387,9 +387,17 @@ export function agreesLocally(live: VerifyResult, recorded: VerifyResult): boole
 export interface LadderStep {
   stage: Stage;
   label: string;
-  state: "done" | "current" | "todo" | "blocked";
+  /** "checking": the Bitcoin steps while the page is still asking Bitcoin (BITCOIN_CHECKING). */
+  state: "done" | "current" | "todo" | "blocked" | "checking";
   detail: string;
 }
+
+/**
+ * The `btc.detail` of a first, quick result whose Bitcoin stages are still being looked up. The
+ * page shows that result at once and replaces it when the Bitcoin answer comes, which can take
+ * half a minute because the public Bitcoin explorers are asked at a gentle pace.
+ */
+export const BITCOIN_CHECKING = "Bitcoin is still being checked";
 
 export const STAGE_LABELS: Record<Stage, string> = {
   pending: "Submitted",
@@ -416,6 +424,9 @@ export function plainBitcoin(status: StatusInfo | null, chainId: number): { tone
     return { tone: "wait", text: `Hemi is publishing to Bitcoin, but this checkpoint has not been seen there yet. Typically final by about ${when}. That is an estimate, not a fact.` };
   }
   const detail = btc.detail ?? "";
+  if (detail === BITCOIN_CHECKING) {
+    return { tone: "wait", text: "Checking Bitcoin now. This can take up to half a minute; everything above already stands." };
+  }
   if (/^no PoP activity/.test(detail)) {
     return {
       tone: "unknown",
@@ -453,12 +464,16 @@ function bitcoinStepText(step: "btc-published" | "btc-final", status: StatusInfo
 export function ladderOf(status: StatusInfo | null, chainId: number): LadderStep[] {
   const stage = status?.stage ?? "pending";
   const reached = stage === "voided" ? -1 : STAGES.indexOf(stage as Stage);
-  const btcBlocked = status?.btc?.source === "unavailable";
+  const btcChecking = status?.btc?.detail === BITCOIN_CHECKING;
+  const btcBlocked = status?.btc?.source === "unavailable" && !btcChecking;
   const hemi = status?.hemi;
   return STAGES.map((s, i): LadderStep => {
     let state: LadderStep["state"] = i < reached ? "done" : i === reached ? "current" : "todo";
     if (i === reached && i === STAGES.length - 1) state = "done";
-    if ((s === "btc-published" || s === "btc-final") && state === "todo" && btcBlocked) state = "blocked";
+    if ((s === "btc-published" || s === "btc-final") && state === "todo") {
+      if (btcBlocked) state = "blocked";
+      else if (btcChecking) state = "checking";
+    }
     let detail = "";
     switch (s) {
       case "pending":
